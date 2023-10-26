@@ -10,8 +10,8 @@
 # <https://www.gnu.org/licenses/>. 
 
 
-source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/00_read_2024_csv.R") # Question for Gwen. How did you get this link? Can I change all source() into links?
-source("https://github.com/HUD-Data-Lab/DataLab/blob/33f9e0615a5857ab2f31f03fe1266444e665be99/DataLab.R")
+source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/00_read_2024_csv.R") # Can we switch all to be source links?
+source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/DataLab.R")
 
 # Goals to do Three method tests for each set up. 
 #### Descriptive measures: (1) (percent of population) (2) Length of time spent homeless
@@ -24,32 +24,47 @@ source("https://github.com/HUD-Data-Lab/DataLab/blob/33f9e0615a5857ab2f31f03fe12
 #Set up data to analyze and compare ----
 # Program enrollment and household information from the APR and CAPER PY24 reporting
 {
+
+  project_list <- c(
+    234,	#"DataLab - ES-EE ESG I",
+    93,	#"DataLab - ES-NbN ESG",
+    1002,	#"DataLab - HP ESG",
+    1625,	#"DataLab - PSH CoC I",
+    1343,	#"DataLab - RRH CoC I",
+    1492,	#"DataLab - RRH CoC II", # set this to RRH-SSO
+    1051,	#"DataLab - RRH ESG I",
+    1647,	#"DataLab - SO ESG",
+    1615,	#"DataLab - SSO CoC",
+    389	#"DataLab - TH CoC" # update the funding source to 5
+  )
+  
+  
 all_program_enrollments <- Enrollment %>% 
-  #filter(ProjectID %in% project_list) %>% # Commented out to include all projects
+  filter(ProjectID %in% project_list) %>% # Match project list to APR
   left_join(Project %>%
               select(ProjectID, ProjectType, ProjectName),
             by = "ProjectID") %>%
   left_join(Exit %>%
-              select(-PersonalID), # Are we removing personalID to avoid the duplication problem? (i.e., PersonalID.X and PersonalID.Y)
+              select(-PersonalID),
             by = "EnrollmentID")
 
 recent_program_enrollment <- all_program_enrollments %>%
   group_by(PersonalID) %>%
   arrange(desc(EntryDate)) %>% #arrange by most recent entry date  
-  slice(1L) %>% #what does 1L do?
+  slice(1L) %>% #Keep the most recent entry
   ungroup() 
 
 # get additional client information (age for reporting)
 client_plus <- add_client_info(recent_program_enrollment)  #View(add_client_info) Getting a warning about mac(age, na.rm=TRUE) is returning -inf
 
-annual_assessment_dates <- Enrollment %>% #What is this trying to get?
-  group_by(HouseholdID) %>%
-  mutate(start_for_annual = max(EntryDate[RelationshipToHoH == 1]), #Max entry date for each head of household
-         years_in_project = trunc((start_for_annual %--% report_end_date) / years(1))) %>% # What does %--% do?
-  filter(years_in_project > 0) %>%
-  mutate(annual_due = start_for_annual %m+% years(years_in_project)) %>%
-  select(HouseholdID, annual_due) %>%
-  distinct()
+# annual_assessment_dates <- Enrollment %>% #Not currently using this.
+#   group_by(HouseholdID) %>%
+#   mutate(start_for_annual = max(EntryDate[RelationshipToHoH == 1]), #Max entry date for each head of household
+#          years_in_project = trunc((start_for_annual %--% report_end_date) / years(1))) %>% # What does %--% do?
+#   filter(years_in_project > 0) %>%
+#   mutate(annual_due = start_for_annual %m+% years(years_in_project)) %>%
+#   select(HouseholdID, annual_due) %>%
+#   distinct()
 
 household_info <- get_household_info(all_program_enrollments,
                                      return_type = "household")
@@ -69,21 +84,24 @@ recent_program_enrollment_r <- recent_program_enrollment %>%
     leaver = ExitDate >= report_start_date &
       ExitDate <= report_end_date & 
       !is.na(ExitDate)) %>%
-  left_join(chronicity_data, by = "EnrollmentID")
+  add_chronicity_data(.)
 
 detail_columns <- c("ProjectName","HouseholdID","PersonalID","EnrollmentID","RelationshipToHoH", "EntryDate","ExitDate")
 
 recent_program_enrollment_allDemograhics <- recent_program_enrollment_r %>%
-  select(all_of(detail_columns), age_group, HoH_HMID) %>%
+  select(all_of(detail_columns), age_group, HoH_HMID, Destination) %>%
   left_join(Client %>%
               select(PersonalID, all_of(unname(race_columns)), RaceNone),
-            by = "PersonalID")
+            by = "PersonalID") %>% 
+  left_join(household_info %>% 
+            select(HouseholdID,household_type),
+            by = "HouseholdID")
 }
 
 #Set up race details
 
 Race_detail <- recent_program_enrollment_allDemograhics %>% 
-  select("PersonalID","EnrollmentID","RelationshipToHoH","EntryDate","ExitDate","AmIndAKNative","Asian","BlackAfAmerican","HispanicLatinaeo",
+  select("PersonalID","EnrollmentID","RelationshipToHoH","EntryDate","ExitDate","Destination","AmIndAKNative","Asian","BlackAfAmerican","HispanicLatinaeo",
          "MidEastNAfrican", "NativeHIPacific","White","RaceNone") %>% 
   mutate(RaceCount = rowSums(across(all_of(unname(race_columns))),na.rm=TRUE)) %>%
   mutate(AmIndAKNative = case_when(AmIndAKNative == 1 ~ "AmIndAKNative", AmIndAKNative == 0 ~ NA),
@@ -93,18 +111,18 @@ Race_detail <- recent_program_enrollment_allDemograhics %>%
          MidEastNAfrican = case_when(MidEastNAfrican == 1 ~ "MidEastNAfrican", MidEastNAfrican == 0 ~ NA),
          NativeHIPacific = case_when(NativeHIPacific == 1 ~ "NativeHIPacific", NativeHIPacific == 0 ~ NA),
          White = case_when(White == 1 ~ "White", White == 0 ~ NA)) %>% 
-  mutate(race_list = apply(Race_detail[c(6:12)], 1, #is there a way to do this from the column select? 
-                                    function(x) paste(x[!is.na(x)], collapse = "/"))) #how does this work?
+  mutate(race_list = apply(.[c(7:13)], 1, #is there a way to do this from the column select? 
+                                    function(x) paste(x[!is.na(x)], collapse = "/")))
 
 View(Race_detail)
 
 #Set up Q12 APR totals
 
-standard_detail_columns2 <- standard_detail_columns[c(1:6)] #removed Household_type
+#standard_detail_columns2 <- standard_detail_columns[c(1:6)] #removed Household_type
 
 
-Q12_detail <- recent_program_enrollment %>%
-  select(all_of(standard_detail_columns2)) %>% #removed age_group and HoH_HMID
+Q12_detail <- recent_program_enrollment_allDemograhics %>% 
+  select(all_of(standard_detail_columns)) %>%
   left_join(Client %>%
               select(PersonalID, all_of(unname(race_columns)), RaceNone),
             by = "PersonalID")
@@ -119,55 +137,126 @@ Q12_counts <- Q12_detail %>%
     race_count = rowSums(across(all_of(unname(race_columns))),
                          na.rm = TRUE),
     race_tabulation = case_when(
-      race_count %in% 1:2 ~ race_name_list,
+      race_count %in% 1:2 ~ race_list,
       race_count > 2 &
         HispanicLatinaeo == 1 ~ "Multiracial – more than 2 races/ethnicity, with one being Hispanic/Latina/e/o",
       race_count > 2 ~ "Multiracial – more than 2 races, where no option is Hispanic/Latina/e/o",
       RaceNone %in% c(8, 9) ~ "Client Doesn’t Know/Prefers Not to Answer",
       TRUE ~ "Data Not Collected"
     )
-  ) %>% 
-  adorn_totals("row")
+  )
+
 
 
 # Tables to compare ----
+{
 
 #APR
+# APRQ12_1 <- Q12_counts %>% 
+#   group_by(race_tabulation) %>%
+#   summarise(APR.Total = n()) %>% 
+#   filter(race_tabulation != "-",
+#          is.na(race_tabulation) == FALSE)
+# 
+# APRQ12 <- APRQ12 %>% 
+#   adorn_totals("row") %>%
+#   mutate(APRQ12.per = paste0(round(100* APR.Total/sum(APRQ12$APR.Total),2),'%')) %>%
+#   ungroup()
+
 APRQ12 <- Q12_counts %>% 
-  group_by(race_list) %>%
+  group_by(race_tabulation) %>%
   summarise(APR.Total = n()) %>% 
-  filter(race_list != "-",
-         is.na(race_list) == FALSE) %>% 
-  mutate(APRQ12.per = paste0(round(100* APR.Total/sum(APR.Total),2),'%')) %>%
-  adorn_totals("row") %>%
+  filter(race_tabulation != "-",
+         race_tabulation != "Client Doesn’t Know/Prefers Not to Answer",
+         race_tabulation != "Data Not Collected",
+         is.na(race_tabulation) == FALSE) %>% 
+  adorn_totals("row") %>% 
+  mutate(APRQ12.per = paste0(round(100* APR.Total/sum(APR.Total[race_tabulation != "Total"],na.rm=TRUE),2),'%')) %>%
   ungroup()
 
+
+
 #Method 1
+
+# M1_method <- Race_detail %>% 
+#   group_by(race_list) %>% 
+#   summarise(M1.Total = n()) %>%
+#   filter(race_list != "") %>% #what is the random blank? Is it the raceNone/missing data elements
+#   mutate(M1.per = paste0(round(100* M1.Total/sum(M1.Total),2),'%')) %>%
+#   adorn_totals("row") %>%
+#   ungroup()
 
 M1_method <- Race_detail %>% 
   group_by(race_list) %>% 
   summarise(M1.Total = n()) %>%
   filter(race_list != "") %>% #what is the random blank? Is it the raceNone/missing data elements
-  adorn_totals("row") %>% 
-  mutate(M1.per = paste0(round(100* M1.Total/sum(M1.Total),2),'%')) %>%
+  adorn_totals("row") %>%
+  mutate(M1.per = paste0(round(100* M1.Total/sum(M1.Total[race_list != "Total"],
+                                                 na.rm = TRUE), 2),'%')) %>%
   ungroup()
 
-
-# Total Descriptoives Compared to APR ----
-M1_APR_compare <- M1_method %>% 
-  left_join(APRQ12, by= "race_list")
-
-# Other calcs
-Race_detail %>% 
-  #filter(RaceCount >=3) %>% 
-  n_distinct("PersonalID")
-
-Q12_counts %>% 
-  filter(#race_count >= 3,
-         race_count < 100) %>% 
-  n_distinct("PersonalID")
+# M1_method_1 <- Race_detail %>% 
+#   group_by(race_list) %>% 
+#   summarise(M1.Total = n()) %>%
+#   filter(race_list != "") 
+# 
+# M1_method <- M1_method_1 %>%
+#   adorn_totals("row") %>%
+#   mutate(M1.per = paste0(round(100* M1.Total/sum(M1_method_1$M1.Total), 2),'%')) %>%
+#   ungroup()
 
 
+# Method 1 Single/Combination grouping compared to APR ----
+M1_APR_compare <-  APRQ12%>% 
+  full_join(M1_method, by= c("race_tabulation" = "race_list"))
 
+M1_APR_compare_ordered <- M1_APR_compare[c(1:15,17:19,16,21:23,20),]
+
+View(M1_APR_compare_ordered)
+
+}
+
+
+# Method 2 Total Response grouping compared to APR ----
+
+APRQ12
+M2_method <- recent_program_enrollment_allDemograhics %>% 
+  select(PersonalID,unname(race_columns)) %>% 
+  mutate(across(
+    all_of(unname(race_columns)),
+    ~ as.numeric(.))) %>% 
+  adorn_totals("row") %>% 
+  filter(PersonalID == "Total") %>% 
+  t() #transpose, but also changes class to a matrix, switch to pivot? ----
+
+M2_Method_df <- M2_method %>% 
+  as.data.frame() %>% 
+  rename(Total = V1,
+         " " = "race_category") %>% # how do I add a column header to blank?
+  filter(Total != "Total")
+
+
+M2_APR_compare <-  APRQ12%>% 
+  full_join(M2_Method_df, by= c("race_tabulation" = "race_category"))
+
+
+
+
+
+# Initial test one ----
+
+# Logistic regression, predicting exits to Permanent housing (individual based on race/ethnicity)
+# Prep the data (personalID, Race, Outcome)
+# *** Not sure if this is a useful comparison. ***
+
+Race_detail_glm <- Race_detail %>% 
+  select(PersonalID,race_list,Destination) %>% 
+  mutate(Binary_Destination = if_else(Destination %in% C(400:499),1,0))
+
+#fit logistic regression model for M1
+model <- glm(Binary_Destination ~ race_list, data=Race_detail_glm, family=binomial)
+
+#view model summary
+summary(model)
 
 
