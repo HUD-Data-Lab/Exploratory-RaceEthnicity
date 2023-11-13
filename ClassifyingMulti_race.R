@@ -10,9 +10,10 @@
 # <https://www.gnu.org/licenses/>. 
 
 
-source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/00_read_2024_csv.R") # Can we switch all to be source links?
+source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/00_read_2024_csv.R")
 source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/DataLab.R")
-
+library(gt)
+library(ROCit)
 # Goals to do Three method tests for each set up. 
 #### Descriptive measures: (1) (percent of population) (2) Length of time spent homeless
 #### Method testing 1: Detailed Ethnicity/Complex (Every combination is unique)
@@ -40,7 +41,7 @@ source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/DataLab.R")
   
   
 all_program_enrollments <- Enrollment %>% 
-  filter(ProjectID %in% project_list) %>% # Match project list to APR
+  #filter(ProjectID %in% project_list) %>% # Match project list to APR, comment out for all projects.
   left_join(Project %>%
               select(ProjectID, ProjectType, ProjectName),
             by = "ProjectID") %>%
@@ -96,7 +97,6 @@ recent_program_enrollment_allDemograhics <- recent_program_enrollment_r %>%
   left_join(household_info %>% 
             select(HouseholdID,household_type),
             by = "HouseholdID")
-}
 
 #Set up race details
 
@@ -114,15 +114,13 @@ Race_detail <- recent_program_enrollment_allDemograhics %>%
   mutate(race_list = apply(.[c(7:13)], 1, #is there a way to do this from the column select? 
                                     function(x) paste(x[!is.na(x)], collapse = "/")))
 
-View(Race_detail)
-
 #Set up Q12 APR totals
 
 #standard_detail_columns2 <- standard_detail_columns[c(1:6)] #removed Household_type
 
 
 Q12_detail <- recent_program_enrollment_allDemograhics %>% 
-  select(all_of(standard_detail_columns)) %>%
+  select(all_of(standard_detail_columns),Destination) %>%
   left_join(Client %>%
               select(PersonalID, all_of(unname(race_columns)), RaceNone),
             by = "PersonalID")
@@ -145,23 +143,13 @@ Q12_counts <- Q12_detail %>%
       TRUE ~ "Data Not Collected"
     )
   )
-
+}
 
 
 # Tables to compare ----
 {
 
-#APR
-# APRQ12_1 <- Q12_counts %>% 
-#   group_by(race_tabulation) %>%
-#   summarise(APR.Total = n()) %>% 
-#   filter(race_tabulation != "-",
-#          is.na(race_tabulation) == FALSE)
-# 
-# APRQ12 <- APRQ12 %>% 
-#   adorn_totals("row") %>%
-#   mutate(APRQ12.per = paste0(round(100* APR.Total/sum(APRQ12$APR.Total),2),'%')) %>%
-#   ungroup()
+# APR Pre-selected combinations defined by HUD
 
 APRQ12 <- Q12_counts %>% 
   group_by(race_tabulation) %>%
@@ -174,80 +162,125 @@ APRQ12 <- Q12_counts %>%
   mutate(APRQ12.per = paste0(round(100* APR.Total/sum(APR.Total[race_tabulation != "Total"],na.rm=TRUE),2),'%')) %>%
   ungroup()
 
+#Method 1 Single/Combination grouping - Each client represented exactly as identified in dataset
 
-
-#Method 1
-
-# M1_method <- Race_detail %>% 
-#   group_by(race_list) %>% 
-#   summarise(M1.Total = n()) %>%
-#   filter(race_list != "") %>% #what is the random blank? Is it the raceNone/missing data elements
-#   mutate(M1.per = paste0(round(100* M1.Total/sum(M1.Total),2),'%')) %>%
-#   adorn_totals("row") %>%
-#   ungroup()
-
-M1_method <- Race_detail %>% 
+Single_Combo_method <- Race_detail %>% 
   group_by(race_list) %>% 
-  summarise(M1.Total = n()) %>%
+  summarise(Single_Combo_total = n()) %>%
   filter(race_list != "") %>% #what is the random blank? Is it the raceNone/missing data elements
   adorn_totals("row") %>%
-  mutate(M1.per = paste0(round(100* M1.Total/sum(M1.Total[race_list != "Total"],
+  mutate(Single_Combo_percent = paste0(round(100* Single_Combo_total/sum(Single_Combo_total[race_list != "Total"],
                                                  na.rm = TRUE), 2),'%')) %>%
   ungroup()
 
-# M1_method_1 <- Race_detail %>% 
-#   group_by(race_list) %>% 
-#   summarise(M1.Total = n()) %>%
-#   filter(race_list != "") 
-# 
-# M1_method <- M1_method_1 %>%
-#   adorn_totals("row") %>%
-#   mutate(M1.per = paste0(round(100* M1.Total/sum(M1_method_1$M1.Total), 2),'%')) %>%
-#   ungroup()
-
 
 # Method 1 Single/Combination grouping compared to APR ----
-M1_APR_compare <-  APRQ12%>% 
-  full_join(M1_method, by= c("race_tabulation" = "race_list"))
+Single_combo_APR_compare <-  APRQ12 %>% 
+  full_join(Single_Combo_method, by= c("race_tabulation" = "race_list"))
 
-M1_APR_compare_ordered <- M1_APR_compare[c(1:15,17:19,16,21:23,20),]
+Single_combo_APR_compare_ordered <- Single_combo_APR_compare[c(1:18,20:22,19,24:32,23),]
 
-View(M1_APR_compare_ordered)
-
-}
+View(Single_combo_APR_compare_ordered)
 
 
-# Method 2 Total Response grouping compared to APR ----
 
-APRQ12
-M2_method <- recent_program_enrollment_allDemograhics %>% 
-  select(PersonalID,unname(race_columns)) %>% 
+# Method 2 Total Response grouping compared to APR ---- 
+
+Total_Response_method <- recent_program_enrollment_allDemograhics %>% 
+  select(unname(race_columns)) %>% 
   mutate(across(
     all_of(unname(race_columns)),
     ~ as.numeric(.))) %>% 
-  adorn_totals("row") %>% 
-  filter(PersonalID == "Total") %>% 
-  t() #transpose, but also changes class to a matrix, switch to pivot? ----
+  colSums() %>% 
+  as.data.frame() %>%
+  setNames("Total_Response_total") %>% 
+  rownames_to_column("Race_Tabulation") %>% 
+  adorn_totals() %>% 
+  mutate(Total_Response_percent = paste0(round(100* Total_Response_total/sum(Total_Response_total[Race_Tabulation != "Total"],
+                                                 na.rm = TRUE), 2),'%'))
 
-M2_Method_df <- M2_method %>% 
-  as.data.frame() %>% 
-  rename(Total = V1,
-         " " = "race_category") %>% # how do I add a column header to blank?
-  filter(Total != "Total")
+Total_Response_APR_compare <-  APRQ12%>% 
+  full_join(Total_Response_method, by= c("race_tabulation" = "Race_Tabulation"))
 
+Total_Response_APR_compare_ordered <- Total_Response_APR_compare[c(1:22,24,23),]
 
-M2_APR_compare <-  APRQ12%>% 
-  full_join(M2_Method_df, by= c("race_tabulation" = "race_category"))
+# APR Joined with Single/Combination and Total Response grouping
 
+Comparison_Table <- Single_combo_APR_compare_ordered %>% 
+  full_join(Total_Response_method, by= c("race_tabulation" = "Race_Tabulation"))
 
+Comparison_Table_ordered <- Comparison_Table[c(1:21,33,22:32),]
+View(Comparison_Table_ordered)
 
+#Make Comparison_Table_ordered a formatted table
 
+gt(Comparison_Table_ordered) |>
+  tab_header(
+    title = md("**Comparing Racial Categories used in Reporting**"),
+    subtitle = md("The three methods commonly used are reporting based on pre-set categories, single combination grouping, total response grouping")
+  )
 
-# Initial test one ----
+}
+
+# Initial test one, using pre-determined categories (APR/CAPER) ----
 
 # Logistic regression, predicting exits to Permanent housing (individual based on race/ethnicity)
 # Prep the data (personalID, Race, Outcome)
-# *** Not sure if this is a useful comparison. ***
+
+Race_detail_APR_glm <- Q12_counts %>% 
+  select(PersonalID,race_list,Destination) %>% 
+  mutate(Binary_Destination = if_else(Destination %in% C(400:499),1,0))
+
+#fit logistic regression model for pre-set categories
+Race_detail_APR_model <- glm(Binary_Destination ~ race_list, data=Race_detail_APR_glm, family=binomial)
+
+#view model summary
+summary(Race_detail_APR_model)
+
+
+# Initial test two, using Single/Combination grouping ----
+
+Single_combo_glm <- Race_detail %>% 
+  select(PersonalID,race_list,Destination) %>% 
+  mutate(Binary_Destination = if_else(Destination %in% C(400:499),1,0))
+
+#fit logistic regression model for M1
+Single_combo_model <- glm(Binary_Destination ~ race_list, data=Single_combo_glm, family=binomial)
+
+#view model summary
+summary(Single_combo_model)
+
+# Odds Ratios
+exp(Single_combo_model$coefficients)
+exp(confint(Single_combo_model))
+
+# Get the f-statistic
+modelChi <- Single_combo_model$null.deviance - Single_combo_model$deviance # Chi square value
+chidf <- Single_combo_model$df.null - Single_combo_model$df.residual       # calculate degrees of freedom for chi-square test
+pchisq(modelChi, chidf, lower.tail = FALSE)      # Use that info to derive p-value
+
+# Evaluate the model
+
+library(ROCit)
+
+class <- Single_combo_model$y # extract the outcomes (1s and 0s) from the model
+score <- qlogis(Single_combo_model$fitted.values) # extract predictions from the model
+
+# Create the curve
+roc <- rocit(score=score,   # predicted outcomes
+             class=class,   # actual outcomes
+             method="bin")  # binomial family
+
+plot(roc)    # plot the curve
+
+ciAUC(roc)   # Calculate the area under the curve w. confidence interval
+# or 
+round(ciAUC(roc)$AUC, 2) # Just the area under the curve
+
+plot(Single_combo_model)
+
+
+# Initial test two, using Single/Combination grouping ----
 
 Race_detail_glm <- Race_detail %>% 
   select(PersonalID,race_list,Destination) %>% 
@@ -258,5 +291,11 @@ model <- glm(Binary_Destination ~ race_list, data=Race_detail_glm, family=binomi
 
 #view model summary
 summary(model)
+
+plot(model)
+
+
+
+
 
 
