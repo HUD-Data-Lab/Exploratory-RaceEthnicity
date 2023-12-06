@@ -14,6 +14,7 @@ source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/00_read_2024
 source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/DataLab.R")
 library(gt)
 library(ROCit)
+
 # Goals to do Three method tests for each set up. 
 #### Descriptive measures: (1) (percent of population) (2) Length of time spent homeless
 #### Method testing 1: Detailed Ethnicity/Complex (Every combination is unique)
@@ -87,10 +88,10 @@ recent_program_enrollment_r <- recent_program_enrollment %>%
       !is.na(ExitDate)) %>%
   add_chronicity_data(.)
 
-detail_columns <- c("ProjectName","HouseholdID","PersonalID","EnrollmentID","RelationshipToHoH", "EntryDate","ExitDate")
+detail_columns <- c("ProjectID","ProjectName","ProjectType","HouseholdID","PersonalID","EnrollmentID","RelationshipToHoH", "EntryDate","ExitDate")
 
 recent_program_enrollment_allDemograhics <- recent_program_enrollment_r %>%
-  select(all_of(detail_columns), age_group, HoH_HMID, Destination) %>%
+  select(all_of(detail_columns), age_group, HoH_HMID, Destination,MoveInDateAdj,leaver,-household_type) %>%
   left_join(Client %>%
               select(PersonalID, all_of(unname(race_columns)), RaceNone),
             by = "PersonalID") %>% 
@@ -101,7 +102,8 @@ recent_program_enrollment_allDemograhics <- recent_program_enrollment_r %>%
 #Set up race details
 
 Race_detail <- recent_program_enrollment_allDemograhics %>% 
-  select("PersonalID","EnrollmentID","RelationshipToHoH","EntryDate","ExitDate","Destination","AmIndAKNative","Asian","BlackAfAmerican","HispanicLatinaeo",
+  select("ProjectID","ProjectName","ProjectType","PersonalID","EnrollmentID","HouseholdID","RelationshipToHoH","household_type","EntryDate","HoH_HMID",
+         "MoveInDateAdj","ExitDate","leaver","Destination","AmIndAKNative","Asian","BlackAfAmerican","HispanicLatinaeo",
          "MidEastNAfrican", "NativeHIPacific","White","RaceNone") %>% 
   mutate(RaceCount = rowSums(across(all_of(unname(race_columns))),na.rm=TRUE)) %>%
   mutate(AmIndAKNative = case_when(AmIndAKNative == 1 ~ "AmIndAKNative", AmIndAKNative == 0 ~ NA),
@@ -110,9 +112,74 @@ Race_detail <- recent_program_enrollment_allDemograhics %>%
          HispanicLatinaeo = case_when(HispanicLatinaeo == 1 ~ "HispanicLatinaeo", HispanicLatinaeo == 0 ~ NA),
          MidEastNAfrican = case_when(MidEastNAfrican == 1 ~ "MidEastNAfrican", MidEastNAfrican == 0 ~ NA),
          NativeHIPacific = case_when(NativeHIPacific == 1 ~ "NativeHIPacific", NativeHIPacific == 0 ~ NA),
-         White = case_when(White == 1 ~ "White", White == 0 ~ NA)) %>% 
-  mutate(race_list = apply(.[c(7:13)], 1, #is there a way to do this from the column select? 
+         White = case_when(White == 1 ~ "White", White == 0 ~ NA),
+         RaceNone= case_when(RaceNone == 8 & RaceCount == 0 ~ "DK/PNTA", RaceNone == 9 & RaceCount == 0 ~ "DK/PNTA", RaceNone == 99 & RaceCount == 0 ~ "Data not Collected")) %>% 
+  mutate(race_list = apply(.[c(15:22)], 1, #is there a way to do this from the column select? 
                                     function(x) paste(x[!is.na(x)], collapse = "/")))
+
+# Time Calcs
+
+LOT_Race_detail <- Race_detail %>%
+  add_length_of_time_groups(., EntryDate, 
+                            ifnull(ExitDate, ymd(report_end_date) + days(1)),
+                            "APR") %>%
+  add_length_of_time_groups(., EntryDate, 
+                            ifnull(ExitDate, ymd(report_end_date) + days(1)),
+                            "CAPER") %>%
+  select(-number_of_days.y) %>%
+  rename(days_enrolled = number_of_days.x,
+         APR_enrollment_length_group = number_of_days_group.x,
+         CAPER_enrollment_length_group = number_of_days_group.y)
+
+LOT_Race_Aggregates <- LOT_Race_detail %>% #Program Participation
+  group_by(leaver,race_list) %>% 
+  summarise(Avg_Days = mean(days_enrolled),
+            Median_Days = median(days_enrolled),
+            Total_response_total = n())
+  
+LOT_Race_Exit_Permanent <- LOT_Race_detail %>% #Exits to Permanent Housing Situations
+  filter(Destination >= 400 & Destination <=499,
+         leaver == TRUE) %>% 
+  group_by(race_list) %>% 
+  summarise(Avg_Days = mean(days_enrolled),
+            Median_Days = median(days_enrolled),
+            Total_response_total = n())
+
+
+#APR Detail Counts
+
+LOT_Race_detail_total <- LOT_Race_detail %>%
+  group_by(APR_enrollment_length_group) %>%
+  summarise(Total = n_distinct(PersonalID, na.rm = TRUE))
+
+LOT_Race_detail_leavers <- LOT_Race_detail %>%
+  filter(!is.na(ExitDate)) %>%
+  group_by(APR_enrollment_length_group) %>%
+  summarise(Leavers = n_distinct(PersonalID, na.rm = TRUE))
+
+LOT_Race_detail_stayers <- LOT_Race_detail %>%
+  filter(is.na(ExitDate)) %>%
+  group_by(APR_enrollment_length_group) %>%
+  summarise(Stayers = n_distinct(PersonalID, na.rm = TRUE))
+
+LOT_Race <- length_of_time_groups("APR", "APR_enrollment_length_group") %>%
+  left_join(LOT_Race_detail_total, by = "APR_enrollment_length_group") %>%
+  left_join(LOT_Race_detail_leavers, by = "APR_enrollment_length_group") %>%
+  left_join(LOT_Race_detail_stayers, by = "APR_enrollment_length_group") %>%
+  adorn_totals("row") %>%
+  ifnull(., 0)
+
+
+
+
+
+
+
+# Length of Stay (Pre-set categories)
+# Reporting Period "2022-09-30" to "2021-10-01"
+
+
+
 
 #Set up Q12 APR totals
 
@@ -149,7 +216,7 @@ Q12_counts <- Q12_detail %>%
 # Tables to compare ----
 {
 
-# APR Pre-selected combinations defined by HUD
+# APR Pre-selected combinations defined by HUD (AKA Single-comb)
 
 APRQ12 <- Q12_counts %>% 
   group_by(race_tabulation) %>%
@@ -162,55 +229,53 @@ APRQ12 <- Q12_counts %>%
   mutate(APRQ12.per = paste0(round(100* APR.Total/sum(APR.Total[race_tabulation != "Total"],na.rm=TRUE),2),'%')) %>%
   ungroup()
 
-#Method 1 Single/Combination grouping - Each client represented exactly as identified in dataset
+#Method 1 Total response (all-inclusive grouping) - Each client represented exactly as identified in dataset
 
-Single_Combo_method <- Race_detail %>% 
+Total_response_method <- Race_detail %>% 
   group_by(race_list) %>% 
-  summarise(Single_Combo_total = n()) %>%
+  summarise(Total_response_total = n()) %>%
   filter(race_list != "") %>% #what is the random blank? Is it the raceNone/missing data elements
   adorn_totals("row") %>%
-  mutate(Single_Combo_percent = paste0(round(100* Single_Combo_total/sum(Single_Combo_total[race_list != "Total"],
+  mutate(Total_response_Percent = paste0(round(100* Total_response_total/sum(Total_response_total[race_list != "Total"],
                                                  na.rm = TRUE), 2),'%')) %>%
   ungroup()
 
 
-# Method 1 Single/Combination grouping compared to APR ----
-Single_combo_APR_compare <-  APRQ12 %>% 
-  full_join(Single_Combo_method, by= c("race_tabulation" = "race_list"))
+# Total Response grouping compared to APR ----
+Total_response_APR_compare <-  APRQ12 %>% 
+  full_join(Total_response_method, by= c("race_tabulation" = "race_list"))
 
-Single_combo_APR_compare_ordered <- Single_combo_APR_compare[c(1:18,20:22,19,24:32,23),]
+Total_response_APR_compare_ordered <- Total_response_APR_compare[c(1:18,20:22,19,24:32,23),]
 
-View(Single_combo_APR_compare_ordered)
+View(Total_response_APR_compare_ordered)
 
 
+# Multiple_Categories grouping (represented once in each race/ethnicity identified (i.e., Asian/White would be counted in both Asian and white)) ---- 
 
-# Method 2 Total Response grouping compared to APR ---- 
-
-Total_Response_method <- recent_program_enrollment_allDemograhics %>% 
+Multi_cat_method <- recent_program_enrollment_allDemograhics %>% 
   select(unname(race_columns)) %>% 
   mutate(across(
     all_of(unname(race_columns)),
     ~ as.numeric(.))) %>% 
   colSums() %>% 
   as.data.frame() %>%
-  setNames("Total_Response_total") %>% 
+  setNames("Multi_cat_total") %>% 
   rownames_to_column("Race_Tabulation") %>% 
   adorn_totals() %>% 
-  mutate(Total_Response_percent = paste0(round(100* Total_Response_total/sum(Total_Response_total[Race_Tabulation != "Total"],
+  mutate(Multi_cat_percent = paste0(round(100* Multi_cat_total/sum(Multi_cat_total[Race_Tabulation != "Total"],
                                                  na.rm = TRUE), 2),'%'))
 
-Total_Response_APR_compare <-  APRQ12%>% 
-  full_join(Total_Response_method, by= c("race_tabulation" = "Race_Tabulation"))
+Multi_Cat_APR_compare <-  APRQ12%>% 
+  full_join(Multi_cat_method, by= c("race_tabulation" = "Race_Tabulation"))
 
-Total_Response_APR_compare_ordered <- Total_Response_APR_compare[c(1:22,24,23),]
+Multi_Cat_APR_compare_ordered <- Multi_Cat_APR_compare[c(1:22,24,23),]
 
-# APR Joined with Single/Combination and Total Response grouping
+# Single/Combination, Total Response grouping, Mulit_cat join
 
-Comparison_Table <- Single_combo_APR_compare_ordered %>% 
-  full_join(Total_Response_method, by= c("race_tabulation" = "Race_Tabulation"))
+Comparison_Table <- Total_response_APR_compare_ordered %>% 
+  full_join(Multi_cat_method, by= c("race_tabulation" = "Race_Tabulation"))
 
 Comparison_Table_ordered <- Comparison_Table[c(1:21,33,22:32),]
-View(Comparison_Table_ordered)
 
 #Make Comparison_Table_ordered a formatted table
 
@@ -222,10 +287,56 @@ gt(Comparison_Table_ordered) |>
 
 }
 
+# Descriptive Visuals ----
+
+
+
+
+
+# Bar graphs
+
+# library
+library(ggplot2)
+
+# create a dataset
+specie <- c(rep("sorgho" , 3) , rep("poacee" , 3) , rep("banana" , 3) , rep("triticum" , 3) )
+condition <- rep(c("normal" , "stress" , "Nitrogen") , 4)
+value <- abs(rnorm(12 , 0 , 15))
+data <- data.frame(specie,condition,value)
+
+#
+chart_df <- Comparison_Table_ordered %>% 
+  select(race_tabulation,APR.Total, Total_response_total) %>% 
+  pivot_longer(.,cols= -race_tabulation) %>% 
+  filter(race_tabulation != "Total")
+
+
+# Grouped
+ggplot(chart_df, aes(fill=name, y=race_tabulation, x=value)) + 
+  geom_col(position = "dodge")
+
+
+#Statisitical Models ----
+
+# Anova -- 
+# Set up Data for import into Gwen's disparities analysis tool
+
+Race_analysis <- Race_detail %>% 
+  mutate(PresetCategories = case_when(
+    RaceCount > 2 ~ "Multiracial(3 or more Races)",
+    TRUE ~ race_list)
+  )
+
+
+#write.csv(Race_analysis, file = "Race_analysis_3orMore.csv")
+
+
 # Initial test one, using pre-determined categories (APR/CAPER) ----
 
 # Logistic regression, predicting exits to Permanent housing (individual based on race/ethnicity)
 # Prep the data (personalID, Race, Outcome)
+
+#Regression Model 1: Pre-set categories predicting exits to Permanent housing (individual based on race/ethnicity)
 
 Race_detail_APR_glm <- Q12_counts %>% 
   select(PersonalID,race_list,Destination) %>% 
@@ -237,64 +348,83 @@ Race_detail_APR_model <- glm(Binary_Destination ~ race_list, data=Race_detail_AP
 #view model summary
 summary(Race_detail_APR_model)
 
-
-# Initial test two, using Single/Combination grouping ----
-
-Single_combo_glm <- Race_detail %>% 
-  select(PersonalID,race_list,Destination) %>% 
-  mutate(Binary_Destination = if_else(Destination %in% C(400:499),1,0))
-
-#fit logistic regression model for M1
-Single_combo_model <- glm(Binary_Destination ~ race_list, data=Single_combo_glm, family=binomial)
-
-#view model summary
-summary(Single_combo_model)
-
 # Odds Ratios
-exp(Single_combo_model$coefficients)
-exp(confint(Single_combo_model))
+exp(Race_detail_APR_model$coefficients)
+exp(confint(Race_detail_APR_model))
 
 # Get the f-statistic
-modelChi <- Single_combo_model$null.deviance - Single_combo_model$deviance # Chi square value
-chidf <- Single_combo_model$df.null - Single_combo_model$df.residual       # calculate degrees of freedom for chi-square test
-pchisq(modelChi, chidf, lower.tail = FALSE)      # Use that info to derive p-value
+modelChi_TF.model <- Total_rspnse_Race_detail_model$null.deviance - Total_rspnse_Race_detail_model$deviance # Chi square value
+chidf_TF.model <- Total_rspnse_Race_detail_model$df.null - Total_rspnse_Race_detail_model$df.residual       # calculate degrees of freedom for chi-square test
+pchisq(modelChi_TF.model, chidf_TF.model, lower.tail = FALSE)      # Use that info to derive p-value
 
 # Evaluate the model
 
 library(ROCit)
 
-class <- Single_combo_model$y # extract the outcomes (1s and 0s) from the model
-score <- qlogis(Single_combo_model$fitted.values) # extract predictions from the model
+class_APR.model <- Race_detail_APR_model$y # extract the outcomes (1s and 0s) from the model
+score_APR.model <- qlogis(Race_detail_APR_model$fitted.values) # extract predictions from the model
 
 # Create the curve
-roc <- rocit(score=score,   # predicted outcomes
-             class=class,   # actual outcomes
+roc_APR.model <- rocit(score=score_APR.model,   # predicted outcomes
+             class=class_APR.model,   # actual outcomes
              method="bin")  # binomial family
 
-plot(roc)    # plot the curve
+plot(roc_APR.model)    # plot the curve
 
-ciAUC(roc)   # Calculate the area under the curve w. confidence interval
+ciAUC(roc_APR.model)   # Calculate the area under the curve w. confidence interval
 # or 
-round(ciAUC(roc)$AUC, 2) # Just the area under the curve
-
-plot(Single_combo_model)
+round(ciAUC(roc_APR.model)$AUC, 2) # Just the area under the curve
 
 
-# Initial test two, using Single/Combination grouping ----
+# Regression Model 2: Total Response (all-inclusive) grouping predicting exits to Permanent housing (individual based on race/ethnicity) ----
 
-Race_detail_glm <- Race_detail %>% 
+Total_rspnse_Race_detail_glm <- Race_detail %>% 
   select(PersonalID,race_list,Destination) %>% 
   mutate(Binary_Destination = if_else(Destination %in% C(400:499),1,0))
 
 #fit logistic regression model for M1
-model <- glm(Binary_Destination ~ race_list, data=Race_detail_glm, family=binomial)
+Total_rspnse_Race_detail_model <- glm(Binary_Destination ~ race_list, data=Total_rspnse_Race_detail_glm, family=binomial)
 
 #view model summary
-summary(model)
+summary(Total_rspnse_Race_detail_model)
 
-plot(model)
+plot(Total_rspnse_Race_detail_model)
 
+# Odds Ratios
+exp(Total_rspnse_Race_detail_model$coefficients)
+exp(confint(Total_rspnse_Race_detail_model))
 
+# Get the f-statistic
+modelChi_TF.model <- Total_rspnse_Race_detail_model$null.deviance - Total_rspnse_Race_detail_model$deviance # Chi square value
+chidf_TF.model <- Total_rspnse_Race_detail_model$df.null - Total_rspnse_Race_detail_model$df.residual       # calculate degrees of freedom for chi-square test
+pchisq(modelChi_TF.model, chidf_TF.model, lower.tail = FALSE)      # Use that info to derive p-value
+
+# Evalaute the model
+
+library(ROCit)
+
+class_TR.model <- Total_rspnse_Race_detail_model$y # extract the outcomes (1s and 0s) from the model
+score_TR.model <- qlogis(Total_rspnse_Race_detail_model$fitted.values) # extract predictions from the model
+
+# Create the curve
+roc_TR.model <- rocit(score=score_TR.model,   # predicted outcomes
+             class=class_TR.model,   # actual outcomes
+             method="bin")  # binomial family
+
+plot(roc_TR.model)    # plot the curve
+
+# Area under the curve: The closer to 1 the better.
+ciAUC(roc_TR.model)   # Calculate the area under the curve w. confidence interval
+# or 
+round(ciAUC(roc_TR.model)$AUC, 2) # Just the area under the curve
+
+plot(roc_TR.model)
+
+# Regression Model 3: Multiple categories predicting exits to Permanent housing (individual based on race/ethnicity)
+
+#prep the data, Should we run it this way? Would this change how we evaluate the model?
+
+# Step 1 list all race/ethnicity and outcomes
 
 
 
