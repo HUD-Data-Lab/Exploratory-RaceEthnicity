@@ -9,9 +9,11 @@
 # GNU Affero General Public License for more details at
 # <https://www.gnu.org/licenses/>. 
 
+#Double check sources to run
 
 source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/00_read_2024_csv.R")
 source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/DataLab.R")
+source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/DataLab_hc_variables.R")
 library(gt)
 library(ROCit)
 
@@ -85,8 +87,8 @@ recent_program_enrollment_r <- recent_program_enrollment %>%
          is.na(ExitDate)) ~ EntryDate),
     leaver = ExitDate >= report_start_date &
       ExitDate <= report_end_date & 
-      !is.na(ExitDate)) %>%
-  add_chronicity_data(.)
+      !is.na(ExitDate)) #%>%
+  #add_chronicity_data(.) #fix later
 
 detail_columns <- c("ProjectID","ProjectName","ProjectType","HouseholdID","PersonalID","EnrollmentID","RelationshipToHoH", "EntryDate","ExitDate")
 
@@ -116,6 +118,60 @@ Race_detail <- recent_program_enrollment_allDemograhics %>%
          RaceNone= case_when(RaceNone == 8 & RaceCount == 0 ~ "DK/PNTA", RaceNone == 9 & RaceCount == 0 ~ "DK/PNTA", RaceNone == 99 & RaceCount == 0 ~ "Data not Collected")) %>% 
   mutate(race_list = apply(.[c(15:22)], 1, #is there a way to do this from the column select? 
                                     function(x) paste(x[!is.na(x)], collapse = "/")))
+
+
+
+#Set up combo details for t.tests
+
+race_columns <- c(AmIndAKNative = "American Indian, Alaska Native, or Indigenous", 
+                  Asian = "Asian or Asian American", 
+                  BlackAfAmerican = "Black, African American, or African", 
+                  HispanicLatinaeo = "Hispanic/Latina/e/o", 
+                  MidEastNAfrican = "Middle Eastern & North African", 
+                  NativeHIPacific = "Native Hawaiian or Pacific Islander", 
+                  White = "White")
+
+race_columns <- setNames(names(race_columns), race_columns) #This adds the full variable names to the race_columns (you can call unname to show full variable name)
+
+
+# ------------------------------------------------------------------------------
+# ----------------------------- Race List --------------------------------------
+# ------------------------------------------------------------------------------
+# used in:
+#   APR/CAPER - Q12a
+
+race_list <- unname(race_columns)  #Saves the list with the abbreviated variable name (i.e., AmIndAKNative)
+
+
+
+df <- recent_program_enrollment_allDemograhics
+
+
+for (race_1 in race_list[1:length(race_list) - 1]) { 
+  for (race_2 in race_list[(match(race_1, race_list) + 1):(length(race_list))]) {
+    if (!exists("df")) {df <- recent_program_enrollment_allDemograhics}
+    df <- df %>%
+      mutate(
+        !!paste0(race_1, ".", race_2) := get(race_1) == 1 | get(race_2) == 1
+      )
+    print(paste(race_1, race_2))
+  }
+}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Time Calcs
 
