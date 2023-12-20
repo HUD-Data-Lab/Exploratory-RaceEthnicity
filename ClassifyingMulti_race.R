@@ -10,12 +10,21 @@
 # <https://www.gnu.org/licenses/>. 
 
 #Double check sources to run
+#Note - use the same dataset as published on Sakai
+#Fun Resources:
+## https://r-graph-gallery.com/
+## https://r-graph-gallery.com/38-rcolorbrewers-palettes.html
+## https://r-graph-gallery.com/ggplot2-color.html
+## https://gallery.htmlwidgets.org/
 
+{
 source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/00_read_2024_csv.R")
 source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/DataLab.R")
-source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/DataLab_hc_variables.R")
+source("https://raw.githubusercontent.com/HUD-Data-Lab/DataLab/main/DataLab_hc_variables.R") #Update this line of code to be in 00_read_2024_csv.R
 library(gt)
 library(ROCit)
+  
+}
 
 # Goals to do Three method tests for each set up. 
 #### Descriptive measures: (1) (percent of population) (2) Length of time spent homeless
@@ -25,8 +34,8 @@ library(ROCit)
 #Comparison and discussion: APR/CAPER, LSA, Census
 
 
-#Set up data to analyze and compare ----
-# Program enrollment and household information from the APR and CAPER PY24 reporting
+#Set up starting data to analyze and compare ----
+# Program enrollment and household information from the APR and CAPER FY24 reporting specifications
 {
 
   project_list <- c(
@@ -101,7 +110,7 @@ recent_program_enrollment_allDemograhics <- recent_program_enrollment_r %>%
             select(HouseholdID,household_type),
             by = "HouseholdID")
 
-#Set up race details
+#Set up Race_details
 
 Race_detail <- recent_program_enrollment_allDemograhics %>% 
   select("ProjectID","ProjectName","ProjectType","PersonalID","EnrollmentID","HouseholdID","RelationshipToHoH","household_type","EntryDate","HoH_HMID",
@@ -120,9 +129,13 @@ Race_detail <- recent_program_enrollment_allDemograhics %>%
                                     function(x) paste(x[!is.na(x)], collapse = "/")))
 
 
+}
 
-#Set up combo details for t.tests
 
+###* Do not run the following Script *####. This code is being moved to other R scripts and this script will be the landing page.
+
+#LOOP Test: Set up combo details for t.tests ----
+{
 race_columns <- c(AmIndAKNative = "American Indian, Alaska Native, or Indigenous", 
                   Asian = "Asian or Asian American", 
                   BlackAfAmerican = "Black, African American, or African", 
@@ -157,23 +170,10 @@ for (race_1 in race_list[1:length(race_list) - 1]) {
     print(paste(race_1, race_2))
   }
 }
-
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-# Time Calcs
+# Time Calcs ----
 
 LOT_Race_detail <- Race_detail %>%
   add_length_of_time_groups(., EntryDate, 
@@ -231,13 +231,7 @@ LOT_Race <- length_of_time_groups("APR", "APR_enrollment_length_group") %>%
 
 
 
-# Length of Stay (Pre-set categories)
-# Reporting Period "2022-09-30" to "2021-10-01"
-
-
-
-
-#Set up Q12 APR totals
+#Set up pre-set cateogries following Q12 APR ---- 
 
 #standard_detail_columns2 <- standard_detail_columns[c(1:6)] #removed Household_type
 
@@ -266,7 +260,6 @@ Q12_counts <- Q12_detail %>%
       TRUE ~ "Data Not Collected"
     )
   )
-}
 
 
 # Tables to compare ----

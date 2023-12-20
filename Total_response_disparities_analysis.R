@@ -3,6 +3,10 @@ library(networkD3)
 options(scipen=999)
 set.seed(2024)
 
+library(ggpubr)
+library(broom)
+library(AICcmodavg)
+
 # Total response -- all categories are represented in all combinations
 
 #Disparities analysis
@@ -26,8 +30,6 @@ Race_Report_Range_Detail <- Race_detail %>%
     ProjectType == 13 ~ "RRH",
     ProjectType == 3 | ProjectType == 9 | ProjectType == 10  ~ "PH"
   ))
-
-
 
 TR_Count_Overall <- Race_Report_Range_Detail %>% 
   group_by(race_list) %>% 
@@ -67,7 +69,7 @@ T.Tests_Standard <- Race_Report_Range_Detail %>%
   ungroup()
 
 T.Tests_Detail <- Race_Report_Range_Detail %>% 
-  select(PersonalID,ProjectType_name,race_list) %>% 
+  select(PersonalID,ProjectType_name,Destination,race_list) %>% 
   mutate("AmIndAKNative" =case_when(race_list == "AmIndAKNative"~1, TRUE ~0), #### This could be a loop *************
          "AmIndAKNative/Asian/HispanicLatinaeo" =case_when(race_list == "AmIndAKNative/Asian/HispanicLatinaeo"~1, TRUE ~0),
          "AmIndAKNative/BlackAfAmerican" =case_when(race_list == "AmIndAKNative/BlackAfAmerican"~1, TRUE ~0),
@@ -100,6 +102,8 @@ T.Tests_Detail <- Race_Report_Range_Detail %>%
          "White" =case_when(race_list == "White"~1, TRUE ~0)
   )
 
+{#Block for running access by Project type t-test
+  
 # Test for Disparities in access to ES
 ES.T.Tests <- T.Tests_Detail %>% 
   filter(ProjectType_name == "ES")
@@ -189,7 +193,7 @@ df_ES.Results <- rbind(df,ES.T_results.AmIndAKNative,ES.T_results.AmIndAKNative.
       
 df_ES.Results<- df_ES.Results[-1,] #remove dummmy row one
 
-#Join the results to the overall table
+#ES Join the results to the overall table
 
 TR_Count_ES_Overall <- T.Tests_Detail %>%
   filter(ProjectType_name  == "ES") %>% 
@@ -203,36 +207,384 @@ TR_Count_ES_Overall <- T.Tests_Detail %>%
 ES_Compare_Overall <-  TR_Count_Overall %>% 
   left_join(df_ES.Results,by="race_list") %>% 
   left_join(TR_Count_ES_Overall,by="race_list") %>% 
-  mutate(Significant = case_when(P.Value <= .05 & Confidence.Interval.Low != "NaN" ~ "Significant", TRUE ~ "Not Significant")) %>% 
-  select(race_list,Total_response_total,Total_response_Percent,ES_total,ES_Percent,P.Value,Confidence.Interval.Low,Confidence.Interval.High,Significant)
+  mutate(ES.Significant = case_when(P.Value <= .05 & Confidence.Interval.Low != "NaN" ~ "Significant", TRUE ~ "Not Significant")) %>% 
+  select(race_list,Total_response_total,Total_response_Percent,ES_total,ES_Percent,ES.P.Value,ES.Confidence.Interval.Low,ES.Confidence.Interval.High,ES.Significant)
 
 
 # Test for Disparities in access to RRH
 RRH.T.Tests <- T.Tests_Detail %>% 
   filter(ProjectType_name == "RRH")
 
-RRH.test.White<- t.test(RRH.T.Tests$White, mu = 0.5569) # mu generated from T.Test_Standard -> Note for Gwen Tried T.Tests_Standard$Total_response_Percent[race_list == "White"]
-# Not Statistically significant we fail to reject the null.
+RRH.T.Tests.AmIndAKNative<-t.test(RRH.T.Tests$`AmIndAKNative`, mu =0.0155)
+RRH.T.Tests.AmIndAKNative.Asian.HispanicLatinaeo<-t.test(RRH.T.Tests$`AmIndAKNative/Asian/HispanicLatinaeo`, mu =0.0002)
+RRH.T.Tests.AmIndAKNative.BlackAfAmerican<-t.test(RRH.T.Tests$`AmIndAKNative/BlackAfAmerican`, mu =0.0063)
+RRH.T.Tests.AmIndAKNative.BlackAfAmerican.HispanicLatinaeo<-t.test(RRH.T.Tests$`AmIndAKNative/BlackAfAmerican/HispanicLatinaeo`, mu =0.0014)
+RRH.T.Tests.AmIndAKNative.HispanicLatinaeo<-t.test(RRH.T.Tests$`AmIndAKNative/HispanicLatinaeo`, mu =0.003)
+RRH.T.Tests.AmIndAKNative.HispanicLatinaeo.NativeHIPacific<-t.test(RRH.T.Tests$`AmIndAKNative/HispanicLatinaeo/NativeHIPacific`, mu =0.0002)
+RRH.T.Tests.AmIndAKNative.HispanicLatinaeo.White<-t.test(RRH.T.Tests$`AmIndAKNative/HispanicLatinaeo/White`, mu =0.0006)
+RRH.T.Tests.AmIndAKNative.NativeHIPacific<-t.test(RRH.T.Tests$`AmIndAKNative/NativeHIPacific`, mu =0.0002)
+RRH.T.Tests.AmIndAKNative.White<-t.test(RRH.T.Tests$`AmIndAKNative/White`, mu =0.0123)
+RRH.T.Tests.Asian<-t.test(RRH.T.Tests$`Asian`, mu =0.004)
+RRH.T.Tests.Asian.BlackAfAmerican<-t.test(RRH.T.Tests$`Asian/BlackAfAmerican`, mu =0.0011)
+RRH.T.Tests.Asian.BlackAfAmerican.HispanicLatinaeo<-t.test(RRH.T.Tests$`Asian/BlackAfAmerican/HispanicLatinaeo`, mu =0.0003)
+RRH.T.Tests.Asian.HispanicLatinaeo<-t.test(RRH.T.Tests$`Asian/HispanicLatinaeo`, mu =0.0009)
+RRH.T.Tests.Asian.HispanicLatinaeo.NativeHIPacific<-t.test(RRH.T.Tests$`Asian/HispanicLatinaeo/NativeHIPacific`, mu =0.0002)
+RRH.T.Tests.Asian.HispanicLatinaeo.White<-t.test(RRH.T.Tests$`Asian/HispanicLatinaeo/White`, mu =0.0002)
+RRH.T.Tests.Asian.White<-t.test(RRH.T.Tests$`Asian/White`, mu =0.0023)
+RRH.T.Tests.BlackAfAmerican<-t.test(RRH.T.Tests$`BlackAfAmerican`, mu =0.2642)
+RRH.T.Tests.BlackAfAmerican.HispanicLatinaeo<-t.test(RRH.T.Tests$`BlackAfAmerican/HispanicLatinaeo`, mu =0.009)
+RRH.T.Tests.BlackAfAmerican.HispanicLatinaeo.NativeHIPacific<-t.test(RRH.T.Tests$`BlackAfAmerican/HispanicLatinaeo/NativeHIPacific`, mu =0.0002)
+RRH.T.Tests.BlackAfAmerican.HispanicLatinaeo.White<-t.test(RRH.T.Tests$`BlackAfAmerican/HispanicLatinaeo/White`, mu =0.0027)
+RRH.T.Tests.BlackAfAmerican.NativeHIPacific<-t.test(RRH.T.Tests$`BlackAfAmerican/NativeHIPacific`, mu =0.0008)
+RRH.T.Tests.BlackAfAmerican.White<-t.test(RRH.T.Tests$`BlackAfAmerican/White`, mu =0.0462)
+RRH.T.Tests.DK.PNTA<-t.test(RRH.T.Tests$`DK/PNTA`, mu =0.0044)
+RRH.T.Tests.Data.not.Collected<-t.test(RRH.T.Tests$`Data not Collected`, mu =0.0032)
+RRH.T.Tests.HispanicLatinaeo<-t.test(RRH.T.Tests$`HispanicLatinaeo`, mu =0.0023)
+RRH.T.Tests.HispanicLatinaeo.NativeHIPacific<-t.test(RRH.T.Tests$`HispanicLatinaeo/NativeHIPacific`, mu =0.0006)
+RRH.T.Tests.HispanicLatinaeo.White<-t.test(RRH.T.Tests$`HispanicLatinaeo/White`, mu =0.0575)
+RRH.T.Tests.NativeHIPacific<-t.test(RRH.T.Tests$`NativeHIPacific`, mu =0.004)
+RRH.T.Tests.NativeHIPacific.White<-t.test(RRH.T.Tests$`NativeHIPacific/White`, mu =0.0008)
+RRH.T.Tests.White<-t.test(RRH.T.Tests$`White`, mu =0.5558)
 
-RRH.test.BlackAfAmerican <- t.test(RRH.T.Tests$BlackAfAmerican, mu = 0.2639)
-# Statistically significant we reject the null. Lower than standard
+# RRH T-test Results
 
-RRH.test.AmIndAKNative_BlackAfAmerican <- t.test(RRH.T.Tests$`AmIndAKNative/BlackAfAmerican`, mu = 0.0063)
-#  Not Statistically significant we fail to reject the null.
+RRH.T_results.AmIndAKNative<-c("AmIndAKNative",RRH.T.Tests.AmIndAKNative$p.value,RRH.T.Tests.AmIndAKNative$conf.int[c(1:2)])
+RRH.T_results.AmIndAKNative.Asian.HispanicLatinaeo<-c("AmIndAKNative/Asian/HispanicLatinaeo",RRH.T.Tests.AmIndAKNative.Asian.HispanicLatinaeo$p.value,RRH.T.Tests.AmIndAKNative.Asian.HispanicLatinaeo$conf.int[c(1:2)])
+RRH.T_results.AmIndAKNative.BlackAfAmerican<-c("AmIndAKNative/BlackAfAmerican",RRH.T.Tests.AmIndAKNative.BlackAfAmerican$p.value,RRH.T.Tests.AmIndAKNative.BlackAfAmerican$conf.int[c(1:2)])
+RRH.T_results.AmIndAKNative.BlackAfAmerican.HispanicLatinaeo<-c("AmIndAKNative/BlackAfAmerican/HispanicLatinaeo",RRH.T.Tests.AmIndAKNative.BlackAfAmerican.HispanicLatinaeo$p.value,RRH.T.Tests.AmIndAKNative.BlackAfAmerican.HispanicLatinaeo$conf.int[c(1:2)])
+RRH.T_results.AmIndAKNative.HispanicLatinaeo<-c("AmIndAKNative/HispanicLatinaeo",RRH.T.Tests.AmIndAKNative.HispanicLatinaeo$p.value,RRH.T.Tests.AmIndAKNative.HispanicLatinaeo$conf.int[c(1:2)])
+RRH.T_results.AmIndAKNative.HispanicLatinaeo.NativeHIPacific<-c("AmIndAKNative/HispanicLatinaeo/NativeHIPacific",RRH.T.Tests.AmIndAKNative.HispanicLatinaeo.NativeHIPacific$p.value,RRH.T.Tests.AmIndAKNative.HispanicLatinaeo.NativeHIPacific$conf.int[c(1:2)])
+RRH.T_results.AmIndAKNative.HispanicLatinaeo.White<-c("AmIndAKNative/HispanicLatinaeo/White",RRH.T.Tests.AmIndAKNative.HispanicLatinaeo.White$p.value,RRH.T.Tests.AmIndAKNative.HispanicLatinaeo.White$conf.int[c(1:2)])
+RRH.T_results.AmIndAKNative.NativeHIPacific<-c("AmIndAKNative/NativeHIPacific",RRH.T.Tests.AmIndAKNative.NativeHIPacific$p.value,RRH.T.Tests.AmIndAKNative.NativeHIPacific$conf.int[c(1:2)])
+RRH.T_results.AmIndAKNative.White<-c("AmIndAKNative/White",RRH.T.Tests.AmIndAKNative.White$p.value,RRH.T.Tests.AmIndAKNative.White$conf.int[c(1:2)])
+RRH.T_results.Asian<-c("Asian",RRH.T.Tests.Asian$p.value,RRH.T.Tests.Asian$conf.int[c(1:2)])
+RRH.T_results.Asian.BlackAfAmerican<-c("Asian/BlackAfAmerican",RRH.T.Tests.Asian.BlackAfAmerican$p.value,RRH.T.Tests.Asian.BlackAfAmerican$conf.int[c(1:2)])
+RRH.T_results.Asian.BlackAfAmerican.HispanicLatinaeo<-c("Asian/BlackAfAmerican/HispanicLatinaeo",RRH.T.Tests.Asian.BlackAfAmerican.HispanicLatinaeo$p.value,RRH.T.Tests.Asian.BlackAfAmerican.HispanicLatinaeo$conf.int[c(1:2)])
+RRH.T_results.Asian.HispanicLatinaeo<-c("Asian/HispanicLatinaeo",RRH.T.Tests.Asian.HispanicLatinaeo$p.value,RRH.T.Tests.Asian.HispanicLatinaeo$conf.int[c(1:2)])
+RRH.T_results.Asian.HispanicLatinaeo.NativeHIPacific<-c("Asian/HispanicLatinaeo/NativeHIPacific",RRH.T.Tests.Asian.HispanicLatinaeo.NativeHIPacific$p.value,RRH.T.Tests.Asian.HispanicLatinaeo.NativeHIPacific$conf.int[c(1:2)])
+RRH.T_results.Asian.HispanicLatinaeo.White<-c("Asian/HispanicLatinaeo/White",RRH.T.Tests.Asian.HispanicLatinaeo.White$p.value,RRH.T.Tests.Asian.HispanicLatinaeo.White$conf.int[c(1:2)])
+RRH.T_results.Asian.White<-c("Asian/White",RRH.T.Tests.Asian.White$p.value,RRH.T.Tests.Asian.White$conf.int[c(1:2)])
+RRH.T_results.BlackAfAmerican<-c("BlackAfAmerican",RRH.T.Tests.BlackAfAmerican$p.value,RRH.T.Tests.BlackAfAmerican$conf.int[c(1:2)])
+RRH.T_results.BlackAfAmerican.HispanicLatinaeo<-c("BlackAfAmerican/HispanicLatinaeo",RRH.T.Tests.BlackAfAmerican.HispanicLatinaeo$p.value,RRH.T.Tests.BlackAfAmerican.HispanicLatinaeo$conf.int[c(1:2)])
+RRH.T_results.BlackAfAmerican.HispanicLatinaeo.NativeHIPacific<-c("BlackAfAmerican/HispanicLatinaeo/NativeHIPacific",RRH.T.Tests.BlackAfAmerican.HispanicLatinaeo.NativeHIPacific$p.value,RRH.T.Tests.BlackAfAmerican.HispanicLatinaeo.NativeHIPacific$conf.int[c(1:2)])
+RRH.T_results.BlackAfAmerican.HispanicLatinaeo.White<-c("BlackAfAmerican/HispanicLatinaeo/White",RRH.T.Tests.BlackAfAmerican.HispanicLatinaeo.White$p.value,RRH.T.Tests.BlackAfAmerican.HispanicLatinaeo.White$conf.int[c(1:2)])
+RRH.T_results.BlackAfAmerican.NativeHIPacific<-c("BlackAfAmerican/NativeHIPacific",RRH.T.Tests.BlackAfAmerican.NativeHIPacific$p.value,RRH.T.Tests.BlackAfAmerican.NativeHIPacific$conf.int[c(1:2)])
+RRH.T_results.BlackAfAmerican.White<-c("BlackAfAmerican/White",RRH.T.Tests.BlackAfAmerican.White$p.value,RRH.T.Tests.BlackAfAmerican.White$conf.int[c(1:2)])
+RRH.T_results.DK.PNTA<-c("DK/PNTA",RRH.T.Tests.DK.PNTA$p.value,RRH.T.Tests.DK.PNTA$conf.int[c(1:2)])
+RRH.T_results.Data.not.Collected<-c("Data not Collected",RRH.T.Tests.Data.not.Collected$p.value,RRH.T.Tests.Data.not.Collected$conf.int[c(1:2)])
+RRH.T_results.HispanicLatinaeo<-c("HispanicLatinaeo",RRH.T.Tests.HispanicLatinaeo$p.value,RRH.T.Tests.HispanicLatinaeo$conf.int[c(1:2)])
+RRH.T_results.HispanicLatinaeo.NativeHIPacific<-c("HispanicLatinaeo/NativeHIPacific",RRH.T.Tests.HispanicLatinaeo.NativeHIPacific$p.value,RRH.T.Tests.HispanicLatinaeo.NativeHIPacific$conf.int[c(1:2)])
+RRH.T_results.HispanicLatinaeo.White<-c("HispanicLatinaeo/White",RRH.T.Tests.HispanicLatinaeo.White$p.value,RRH.T.Tests.HispanicLatinaeo.White$conf.int[c(1:2)])
+RRH.T_results.NativeHIPacific<-c("NativeHIPacific",RRH.T.Tests.NativeHIPacific$p.value,RRH.T.Tests.NativeHIPacific$conf.int[c(1:2)])
+RRH.T_results.NativeHIPacific.White<-c("NativeHIPacific/White",RRH.T.Tests.NativeHIPacific.White$p.value,RRH.T.Tests.NativeHIPacific.White$conf.int[c(1:2)])
+RRH.T_results.White<-c("White",RRH.T.Tests.White$p.value,RRH.T.Tests.White$conf.int[c(1:2)])
+
+df <- data.frame("race_list" = 1,
+                 "RRH.P.Value" = 1 ,
+                 "RRH.Confidence.Interval.Low" = 1,
+                 "RRH.Confidence.Interval.High" = 1)
+
+df_RRH.Results <- rbind(df,RRH.T_results.AmIndAKNative,RRH.T_results.AmIndAKNative.Asian.HispanicLatinaeo,
+                        RRH.T_results.AmIndAKNative.BlackAfAmerican,RRH.T_results.AmIndAKNative.BlackAfAmerican.HispanicLatinaeo,
+                        RRH.T_results.AmIndAKNative.HispanicLatinaeo,RRH.T_results.AmIndAKNative.HispanicLatinaeo.NativeHIPacific,
+                        RRH.T_results.AmIndAKNative.HispanicLatinaeo.White,RRH.T_results.AmIndAKNative.NativeHIPacific,
+                        RRH.T_results.AmIndAKNative.White,RRH.T_results.Asian,RRH.T_results.Asian.BlackAfAmerican,
+                        RRH.T_results.Asian.BlackAfAmerican.HispanicLatinaeo,RRH.T_results.Asian.HispanicLatinaeo,
+                        RRH.T_results.Asian.HispanicLatinaeo.NativeHIPacific,RRH.T_results.Asian.HispanicLatinaeo.White,RRH.T_results.Asian.White,
+                        RRH.T_results.BlackAfAmerican,RRH.T_results.BlackAfAmerican.HispanicLatinaeo,
+                        RRH.T_results.BlackAfAmerican.HispanicLatinaeo.NativeHIPacific,RRH.T_results.BlackAfAmerican.HispanicLatinaeo.White,
+                        RRH.T_results.BlackAfAmerican.NativeHIPacific,RRH.T_results.BlackAfAmerican.White,RRH.T_results.DK.PNTA,
+                        RRH.T_results.Data.not.Collected,RRH.T_results.HispanicLatinaeo,
+                        RRH.T_results.HispanicLatinaeo.NativeHIPacific,RRH.T_results.HispanicLatinaeo.White,
+                        RRH.T_results.NativeHIPacific,RRH.T_results.NativeHIPacific.White,RRH.T_results.White,make.row.names = FALSE)
+
+df_RRH.Results<- df_RRH.Results[-1,] #remove dummmy row one
+
+#RRH Join the results to the overall table
+
+TR_Count_RRH_Overall <- T.Tests_Detail %>%
+  filter(ProjectType_name  == "RRH") %>% 
+  group_by(race_list) %>% 
+  summarise(RRH_total = n()) %>%
+  mutate(RRH_Percent = paste0(round(100* RRH_total/sum(RRH_total[race_list != "Total"],
+                                                     na.rm = TRUE), 2),'%')) %>%
+  ungroup()
+
+
+RRH_Compare_Overall <-  TR_Count_Overall %>% 
+  left_join(df_RRH.Results,by="race_list") %>% 
+  left_join(TR_Count_RRH_Overall,by="race_list") %>% 
+  mutate(RRH.Significant = case_when(RRH.P.Value <= .05 & RRH.Confidence.Interval.Low != "NaN" ~ "Significant", TRUE ~ "Not Significant")) %>% 
+  select(race_list,Total_response_total,Total_response_Percent,RRH_total,RRH_Percent,RRH.P.Value,RRH.Confidence.Interval.Low,RRH.Confidence.Interval.High,RRH.Significant)
 
 # Test for Disparities in access to PH
 PH.T.Tests <- T.Tests_Detail %>% 
   filter(ProjectType_name == "PH")
 
-PH.test.White<- t.test(PH.T.Tests$White, mu = 0.5569) # mu generated from T.Test_Standard -> Note for Gwen Tried T.Tests_Standard$Total_response_Percent[race_list == "White"]
-# Statistically significant we reject the null. Higher than standard
+PH.T.Tests.AmIndAKNative<-t.test(PH.T.Tests$`AmIndAKNative`, mu =0.0155)
+PH.T.Tests.AmIndAKNative.Asian.HispanicLatinaeo<-t.test(PH.T.Tests$`AmIndAKNative/Asian/HispanicLatinaeo`, mu =0.0002)
+PH.T.Tests.AmIndAKNative.BlackAfAmerican<-t.test(PH.T.Tests$`AmIndAKNative/BlackAfAmerican`, mu =0.0063)
+PH.T.Tests.AmIndAKNative.BlackAfAmerican.HispanicLatinaeo<-t.test(PH.T.Tests$`AmIndAKNative/BlackAfAmerican/HispanicLatinaeo`, mu =0.0014)
+PH.T.Tests.AmIndAKNative.HispanicLatinaeo<-t.test(PH.T.Tests$`AmIndAKNative/HispanicLatinaeo`, mu =0.003)
+PH.T.Tests.AmIndAKNative.HispanicLatinaeo.NativeHIPacific<-t.test(PH.T.Tests$`AmIndAKNative/HispanicLatinaeo/NativeHIPacific`, mu =0.0002)
+PH.T.Tests.AmIndAKNative.HispanicLatinaeo.White<-t.test(PH.T.Tests$`AmIndAKNative/HispanicLatinaeo/White`, mu =0.0006)
+PH.T.Tests.AmIndAKNative.NativeHIPacific<-t.test(PH.T.Tests$`AmIndAKNative/NativeHIPacific`, mu =0.0002)
+PH.T.Tests.AmIndAKNative.White<-t.test(PH.T.Tests$`AmIndAKNative/White`, mu =0.0123)
+PH.T.Tests.Asian<-t.test(PH.T.Tests$`Asian`, mu =0.004)
+PH.T.Tests.Asian.BlackAfAmerican<-t.test(PH.T.Tests$`Asian/BlackAfAmerican`, mu =0.0011)
+PH.T.Tests.Asian.BlackAfAmerican.HispanicLatinaeo<-t.test(PH.T.Tests$`Asian/BlackAfAmerican/HispanicLatinaeo`, mu =0.0003)
+PH.T.Tests.Asian.HispanicLatinaeo<-t.test(PH.T.Tests$`Asian/HispanicLatinaeo`, mu =0.0009)
+PH.T.Tests.Asian.HispanicLatinaeo.NativeHIPacific<-t.test(PH.T.Tests$`Asian/HispanicLatinaeo/NativeHIPacific`, mu =0.0002)
+PH.T.Tests.Asian.HispanicLatinaeo.White<-t.test(PH.T.Tests$`Asian/HispanicLatinaeo/White`, mu =0.0002)
+PH.T.Tests.Asian.White<-t.test(PH.T.Tests$`Asian/White`, mu =0.0023)
+PH.T.Tests.BlackAfAmerican<-t.test(PH.T.Tests$`BlackAfAmerican`, mu =0.2642)
+PH.T.Tests.BlackAfAmerican.HispanicLatinaeo<-t.test(PH.T.Tests$`BlackAfAmerican/HispanicLatinaeo`, mu =0.009)
+PH.T.Tests.BlackAfAmerican.HispanicLatinaeo.NativeHIPacific<-t.test(PH.T.Tests$`BlackAfAmerican/HispanicLatinaeo/NativeHIPacific`, mu =0.0002)
+PH.T.Tests.BlackAfAmerican.HispanicLatinaeo.White<-t.test(PH.T.Tests$`BlackAfAmerican/HispanicLatinaeo/White`, mu =0.0027)
+PH.T.Tests.BlackAfAmerican.NativeHIPacific<-t.test(PH.T.Tests$`BlackAfAmerican/NativeHIPacific`, mu =0.0008)
+PH.T.Tests.BlackAfAmerican.White<-t.test(PH.T.Tests$`BlackAfAmerican/White`, mu =0.0462)
+PH.T.Tests.DK.PNTA<-t.test(PH.T.Tests$`DK/PNTA`, mu =0.0044)
+PH.T.Tests.Data.not.Collected<-t.test(PH.T.Tests$`Data not Collected`, mu =0.0032)
+PH.T.Tests.HispanicLatinaeo<-t.test(PH.T.Tests$`HispanicLatinaeo`, mu =0.0023)
+PH.T.Tests.HispanicLatinaeo.NativeHIPacific<-t.test(PH.T.Tests$`HispanicLatinaeo/NativeHIPacific`, mu =0.0006)
+PH.T.Tests.HispanicLatinaeo.White<-t.test(PH.T.Tests$`HispanicLatinaeo/White`, mu =0.0575)
+PH.T.Tests.NativeHIPacific<-t.test(PH.T.Tests$`NativeHIPacific`, mu =0.004)
+PH.T.Tests.NativeHIPacific.White<-t.test(PH.T.Tests$`NativeHIPacific/White`, mu =0.0008)
+PH.T.Tests.White<-t.test(PH.T.Tests$`White`, mu =0.5558)
 
-PH.test.BlackAfAmerican <- t.test(PH.T.Tests$BlackAfAmerican, mu = 0.2639)
-# Not Statistically significant we fail to reject the null.
+# PH T-test Results
 
-PH.test.AmIndAKNative_BlackAfAmerican <- t.test(PH.T.Tests$`AmIndAKNative/BlackAfAmerican`, mu = 0.0063)
-# No enrollments into PH. Not applicable for this test. 
-# PH.T.Tests %>% filter(race_list=="AmIndAKNative/BlackAfAmerican")
+PH.T_results.AmIndAKNative<-c("AmIndAKNative",PH.T.Tests.AmIndAKNative$p.value,PH.T.Tests.AmIndAKNative$conf.int[c(1:2)])
+PH.T_results.AmIndAKNative.Asian.HispanicLatinaeo<-c("AmIndAKNative/Asian/HispanicLatinaeo",PH.T.Tests.AmIndAKNative.Asian.HispanicLatinaeo$p.value,PH.T.Tests.AmIndAKNative.Asian.HispanicLatinaeo$conf.int[c(1:2)])
+PH.T_results.AmIndAKNative.BlackAfAmerican<-c("AmIndAKNative/BlackAfAmerican",PH.T.Tests.AmIndAKNative.BlackAfAmerican$p.value,PH.T.Tests.AmIndAKNative.BlackAfAmerican$conf.int[c(1:2)])
+PH.T_results.AmIndAKNative.BlackAfAmerican.HispanicLatinaeo<-c("AmIndAKNative/BlackAfAmerican/HispanicLatinaeo",PH.T.Tests.AmIndAKNative.BlackAfAmerican.HispanicLatinaeo$p.value,PH.T.Tests.AmIndAKNative.BlackAfAmerican.HispanicLatinaeo$conf.int[c(1:2)])
+PH.T_results.AmIndAKNative.HispanicLatinaeo<-c("AmIndAKNative/HispanicLatinaeo",PH.T.Tests.AmIndAKNative.HispanicLatinaeo$p.value,PH.T.Tests.AmIndAKNative.HispanicLatinaeo$conf.int[c(1:2)])
+PH.T_results.AmIndAKNative.HispanicLatinaeo.NativeHIPacific<-c("AmIndAKNative/HispanicLatinaeo/NativeHIPacific",PH.T.Tests.AmIndAKNative.HispanicLatinaeo.NativeHIPacific$p.value,PH.T.Tests.AmIndAKNative.HispanicLatinaeo.NativeHIPacific$conf.int[c(1:2)])
+PH.T_results.AmIndAKNative.HispanicLatinaeo.White<-c("AmIndAKNative/HispanicLatinaeo/White",PH.T.Tests.AmIndAKNative.HispanicLatinaeo.White$p.value,PH.T.Tests.AmIndAKNative.HispanicLatinaeo.White$conf.int[c(1:2)])
+PH.T_results.AmIndAKNative.NativeHIPacific<-c("AmIndAKNative/NativeHIPacific",PH.T.Tests.AmIndAKNative.NativeHIPacific$p.value,PH.T.Tests.AmIndAKNative.NativeHIPacific$conf.int[c(1:2)])
+PH.T_results.AmIndAKNative.White<-c("AmIndAKNative/White",PH.T.Tests.AmIndAKNative.White$p.value,PH.T.Tests.AmIndAKNative.White$conf.int[c(1:2)])
+PH.T_results.Asian<-c("Asian",PH.T.Tests.Asian$p.value,PH.T.Tests.Asian$conf.int[c(1:2)])
+PH.T_results.Asian.BlackAfAmerican<-c("Asian/BlackAfAmerican",PH.T.Tests.Asian.BlackAfAmerican$p.value,PH.T.Tests.Asian.BlackAfAmerican$conf.int[c(1:2)])
+PH.T_results.Asian.BlackAfAmerican.HispanicLatinaeo<-c("Asian/BlackAfAmerican/HispanicLatinaeo",PH.T.Tests.Asian.BlackAfAmerican.HispanicLatinaeo$p.value,PH.T.Tests.Asian.BlackAfAmerican.HispanicLatinaeo$conf.int[c(1:2)])
+PH.T_results.Asian.HispanicLatinaeo<-c("Asian/HispanicLatinaeo",PH.T.Tests.Asian.HispanicLatinaeo$p.value,PH.T.Tests.Asian.HispanicLatinaeo$conf.int[c(1:2)])
+PH.T_results.Asian.HispanicLatinaeo.NativeHIPacific<-c("Asian/HispanicLatinaeo/NativeHIPacific",PH.T.Tests.Asian.HispanicLatinaeo.NativeHIPacific$p.value,PH.T.Tests.Asian.HispanicLatinaeo.NativeHIPacific$conf.int[c(1:2)])
+PH.T_results.Asian.HispanicLatinaeo.White<-c("Asian/HispanicLatinaeo/White",PH.T.Tests.Asian.HispanicLatinaeo.White$p.value,PH.T.Tests.Asian.HispanicLatinaeo.White$conf.int[c(1:2)])
+PH.T_results.Asian.White<-c("Asian/White",PH.T.Tests.Asian.White$p.value,PH.T.Tests.Asian.White$conf.int[c(1:2)])
+PH.T_results.BlackAfAmerican<-c("BlackAfAmerican",PH.T.Tests.BlackAfAmerican$p.value,PH.T.Tests.BlackAfAmerican$conf.int[c(1:2)])
+PH.T_results.BlackAfAmerican.HispanicLatinaeo<-c("BlackAfAmerican/HispanicLatinaeo",PH.T.Tests.BlackAfAmerican.HispanicLatinaeo$p.value,PH.T.Tests.BlackAfAmerican.HispanicLatinaeo$conf.int[c(1:2)])
+PH.T_results.BlackAfAmerican.HispanicLatinaeo.NativeHIPacific<-c("BlackAfAmerican/HispanicLatinaeo/NativeHIPacific",PH.T.Tests.BlackAfAmerican.HispanicLatinaeo.NativeHIPacific$p.value,PH.T.Tests.BlackAfAmerican.HispanicLatinaeo.NativeHIPacific$conf.int[c(1:2)])
+PH.T_results.BlackAfAmerican.HispanicLatinaeo.White<-c("BlackAfAmerican/HispanicLatinaeo/White",PH.T.Tests.BlackAfAmerican.HispanicLatinaeo.White$p.value,PH.T.Tests.BlackAfAmerican.HispanicLatinaeo.White$conf.int[c(1:2)])
+PH.T_results.BlackAfAmerican.NativeHIPacific<-c("BlackAfAmerican/NativeHIPacific",PH.T.Tests.BlackAfAmerican.NativeHIPacific$p.value,PH.T.Tests.BlackAfAmerican.NativeHIPacific$conf.int[c(1:2)])
+PH.T_results.BlackAfAmerican.White<-c("BlackAfAmerican/White",PH.T.Tests.BlackAfAmerican.White$p.value,PH.T.Tests.BlackAfAmerican.White$conf.int[c(1:2)])
+PH.T_results.DK.PNTA<-c("DK/PNTA",PH.T.Tests.DK.PNTA$p.value,PH.T.Tests.DK.PNTA$conf.int[c(1:2)])
+PH.T_results.Data.not.Collected<-c("Data not Collected",PH.T.Tests.Data.not.Collected$p.value,PH.T.Tests.Data.not.Collected$conf.int[c(1:2)])
+PH.T_results.HispanicLatinaeo<-c("HispanicLatinaeo",PH.T.Tests.HispanicLatinaeo$p.value,PH.T.Tests.HispanicLatinaeo$conf.int[c(1:2)])
+PH.T_results.HispanicLatinaeo.NativeHIPacific<-c("HispanicLatinaeo/NativeHIPacific",PH.T.Tests.HispanicLatinaeo.NativeHIPacific$p.value,PH.T.Tests.HispanicLatinaeo.NativeHIPacific$conf.int[c(1:2)])
+PH.T_results.HispanicLatinaeo.White<-c("HispanicLatinaeo/White",PH.T.Tests.HispanicLatinaeo.White$p.value,PH.T.Tests.HispanicLatinaeo.White$conf.int[c(1:2)])
+PH.T_results.NativeHIPacific<-c("NativeHIPacific",PH.T.Tests.NativeHIPacific$p.value,PH.T.Tests.NativeHIPacific$conf.int[c(1:2)])
+PH.T_results.NativeHIPacific.White<-c("NativeHIPacific/White",PH.T.Tests.NativeHIPacific.White$p.value,PH.T.Tests.NativeHIPacific.White$conf.int[c(1:2)])
+PH.T_results.White<-c("White",PH.T.Tests.White$p.value,PH.T.Tests.White$conf.int[c(1:2)])
+
+df <- data.frame("race_list" = 1,
+                 "PH.P.Value" = 1 ,
+                 "PH.Confidence.Interval.Low" = 1,
+                 "PH.Confidence.Interval.High" = 1)
+
+df_PH.Results <- rbind(df,PH.T_results.AmIndAKNative,PH.T_results.AmIndAKNative.Asian.HispanicLatinaeo,
+                       PH.T_results.AmIndAKNative.BlackAfAmerican,PH.T_results.AmIndAKNative.BlackAfAmerican.HispanicLatinaeo,
+                       PH.T_results.AmIndAKNative.HispanicLatinaeo,PH.T_results.AmIndAKNative.HispanicLatinaeo.NativeHIPacific,
+                       PH.T_results.AmIndAKNative.HispanicLatinaeo.White,PH.T_results.AmIndAKNative.NativeHIPacific,
+                       PH.T_results.AmIndAKNative.White,PH.T_results.Asian,PH.T_results.Asian.BlackAfAmerican,
+                       PH.T_results.Asian.BlackAfAmerican.HispanicLatinaeo,PH.T_results.Asian.HispanicLatinaeo,
+                       PH.T_results.Asian.HispanicLatinaeo.NativeHIPacific,PH.T_results.Asian.HispanicLatinaeo.White,PH.T_results.Asian.White,
+                       PH.T_results.BlackAfAmerican,PH.T_results.BlackAfAmerican.HispanicLatinaeo,
+                       PH.T_results.BlackAfAmerican.HispanicLatinaeo.NativeHIPacific,PH.T_results.BlackAfAmerican.HispanicLatinaeo.White,
+                       PH.T_results.BlackAfAmerican.NativeHIPacific,PH.T_results.BlackAfAmerican.White,PH.T_results.DK.PNTA,
+                       PH.T_results.Data.not.Collected,PH.T_results.HispanicLatinaeo,
+                       PH.T_results.HispanicLatinaeo.NativeHIPacific,PH.T_results.HispanicLatinaeo.White,
+                       PH.T_results.NativeHIPacific,PH.T_results.NativeHIPacific.White,PH.T_results.White,make.row.names = FALSE)
+
+df_PH.Results<- df_PH.Results[-1,] #remove dummmy row one
+
+#PH Join the results to the overall table
+
+TR_Count_PH_Overall <- T.Tests_Detail %>%
+  filter(ProjectType_name  == "PH") %>% 
+  group_by(race_list) %>% 
+  summarise(PH_total = n()) %>%
+  mutate(PH_Percent = paste0(round(100* PH_total/sum(PH_total[race_list != "Total"],
+                                                     na.rm = TRUE), 2),'%')) %>%
+  ungroup()
+
+
+PH_Compare_Overall <-  TR_Count_Overall %>% 
+  left_join(df_PH.Results,by="race_list") %>% 
+  left_join(TR_Count_PH_Overall,by="race_list") %>% 
+  mutate(PH.Significant = case_when(PH.P.Value <= .05 & PH.Confidence.Interval.Low != "NaN" ~ "Significant", TRUE ~ "Not Significant")) %>% 
+  select(race_list,Total_response_total,Total_response_Percent,PH_total,PH_Percent,PH.P.Value,PH.Confidence.Interval.Low,PH.Confidence.Interval.High,PH.Significant)
+}
+
+# Overall disparities in Exits
+# T-test compare for Exits to Permanent housing
+# USing single sample t-test to see if there is a difference between the proportions of those served to those exited.
+
+
+Exits_Overall <- T.Tests_Detail %>% 
+  mutate(Destination_name = case_when(
+    Destination %in% c(400:499)~ "Permanent Housing",
+    Destination %in% c(300:399)~ "Temporary Housing",
+    Destination %in% c(200:299)~ "Institutional Situations",
+    Destination %in% c(100:199)~ "Homeless Situations",
+    Destination %in% c(1:99)~ "Other",
+    is.na(Destination) ~ "Stayer",
+    ),
+    PH_Exits = case_when(
+      Destination_name == "Permanent Housing"~ 1, TRUE ~0))
+
+PH_Exits_Count_Overall <- Exits_Overall %>% 
+  filter(Destination_name == "Permanent Housing") %>% 
+  group_by(race_list) %>% 
+  summarise(PH_EXITS_total = n()) %>%
+  mutate(PH_EXITS_percent = paste0(round(100* PH_EXITS_total/sum(PH_EXITS_total[race_list != "Total"],
+                                                                             na.rm = TRUE), 2),'%')) %>%
+  ungroup()
+
+PH_EXITS.T.Tests <- Exits_Overall %>% 
+  filter(Destination_name == "Permanent Housing")
+
+#T-tests for Exits to Permanent Housing
+
+PH_EXITS.T.Tests.AmIndAKNative<-t.test(PH_EXITS.T.Tests$`AmIndAKNative`, mu =0.0155)
+PH_EXITS.T.Tests.AmIndAKNative.Asian.HispanicLatinaeo<-t.test(PH_EXITS.T.Tests$`AmIndAKNative/Asian/HispanicLatinaeo`, mu =0.0002)
+PH_EXITS.T.Tests.AmIndAKNative.BlackAfAmerican<-t.test(PH_EXITS.T.Tests$`AmIndAKNative/BlackAfAmerican`, mu =0.0063)
+PH_EXITS.T.Tests.AmIndAKNative.BlackAfAmerican.HispanicLatinaeo<-t.test(PH_EXITS.T.Tests$`AmIndAKNative/BlackAfAmerican/HispanicLatinaeo`, mu =0.0014)
+PH_EXITS.T.Tests.AmIndAKNative.HispanicLatinaeo<-t.test(PH_EXITS.T.Tests$`AmIndAKNative/HispanicLatinaeo`, mu =0.003)
+PH_EXITS.T.Tests.AmIndAKNative.HispanicLatinaeo.NativeHIPacific<-t.test(PH_EXITS.T.Tests$`AmIndAKNative/HispanicLatinaeo/NativeHIPacific`, mu =0.0002)
+PH_EXITS.T.Tests.AmIndAKNative.HispanicLatinaeo.White<-t.test(PH_EXITS.T.Tests$`AmIndAKNative/HispanicLatinaeo/White`, mu =0.0006)
+PH_EXITS.T.Tests.AmIndAKNative.NativeHIPacific<-t.test(PH_EXITS.T.Tests$`AmIndAKNative/NativeHIPacific`, mu =0.0002)
+PH_EXITS.T.Tests.AmIndAKNative.White<-t.test(PH_EXITS.T.Tests$`AmIndAKNative/White`, mu =0.0123)
+PH_EXITS.T.Tests.Asian<-t.test(PH_EXITS.T.Tests$`Asian`, mu =0.004)
+PH_EXITS.T.Tests.Asian.BlackAfAmerican<-t.test(PH_EXITS.T.Tests$`Asian/BlackAfAmerican`, mu =0.0011)
+PH_EXITS.T.Tests.Asian.BlackAfAmerican.HispanicLatinaeo<-t.test(PH_EXITS.T.Tests$`Asian/BlackAfAmerican/HispanicLatinaeo`, mu =0.0003)
+PH_EXITS.T.Tests.Asian.HispanicLatinaeo<-t.test(PH_EXITS.T.Tests$`Asian/HispanicLatinaeo`, mu =0.0009)
+PH_EXITS.T.Tests.Asian.HispanicLatinaeo.NativeHIPacific<-t.test(PH_EXITS.T.Tests$`Asian/HispanicLatinaeo/NativeHIPacific`, mu =0.0002)
+PH_EXITS.T.Tests.Asian.HispanicLatinaeo.White<-t.test(PH_EXITS.T.Tests$`Asian/HispanicLatinaeo/White`, mu =0.0002)
+PH_EXITS.T.Tests.Asian.White<-t.test(PH_EXITS.T.Tests$`Asian/White`, mu =0.0023)
+PH_EXITS.T.Tests.BlackAfAmerican<-t.test(PH_EXITS.T.Tests$`BlackAfAmerican`, mu =0.2642)
+PH_EXITS.T.Tests.BlackAfAmerican.HispanicLatinaeo<-t.test(PH_EXITS.T.Tests$`BlackAfAmerican/HispanicLatinaeo`, mu =0.009)
+PH_EXITS.T.Tests.BlackAfAmerican.HispanicLatinaeo.NativeHIPacific<-t.test(PH_EXITS.T.Tests$`BlackAfAmerican/HispanicLatinaeo/NativeHIPacific`, mu =0.0002)
+PH_EXITS.T.Tests.BlackAfAmerican.HispanicLatinaeo.White<-t.test(PH_EXITS.T.Tests$`BlackAfAmerican/HispanicLatinaeo/White`, mu =0.0027)
+PH_EXITS.T.Tests.BlackAfAmerican.NativeHIPacific<-t.test(PH_EXITS.T.Tests$`BlackAfAmerican/NativeHIPacific`, mu =0.0008)
+PH_EXITS.T.Tests.BlackAfAmerican.White<-t.test(PH_EXITS.T.Tests$`BlackAfAmerican/White`, mu =0.0462)
+PH_EXITS.T.Tests.DK.PNTA<-t.test(PH_EXITS.T.Tests$`DK/PNTA`, mu =0.0044)
+PH_EXITS.T.Tests.Data.not.Collected<-t.test(PH_EXITS.T.Tests$`Data not Collected`, mu =0.0032)
+PH_EXITS.T.Tests.HispanicLatinaeo<-t.test(PH_EXITS.T.Tests$`HispanicLatinaeo`, mu =0.0023)
+PH_EXITS.T.Tests.HispanicLatinaeo.NativeHIPacific<-t.test(PH_EXITS.T.Tests$`HispanicLatinaeo/NativeHIPacific`, mu =0.0006)
+PH_EXITS.T.Tests.HispanicLatinaeo.White<-t.test(PH_EXITS.T.Tests$`HispanicLatinaeo/White`, mu =0.0575)
+PH_EXITS.T.Tests.NativeHIPacific<-t.test(PH_EXITS.T.Tests$`NativeHIPacific`, mu =0.004)
+PH_EXITS.T.Tests.NativeHIPacific.White<-t.test(PH_EXITS.T.Tests$`NativeHIPacific/White`, mu =0.0008)
+PH_EXITS.T.Tests.White<-t.test(PH_EXITS.T.Tests$`White`, mu =0.5558)
+
+# PH_EXITS T-test Results
+
+PH_EXITS.T_results.AmIndAKNative<-c("AmIndAKNative",PH_EXITS.T.Tests.AmIndAKNative$p.value,PH_EXITS.T.Tests.AmIndAKNative$conf.int[c(1:2)])
+PH_EXITS.T_results.AmIndAKNative.Asian.HispanicLatinaeo<-c("AmIndAKNative/Asian/HispanicLatinaeo",PH_EXITS.T.Tests.AmIndAKNative.Asian.HispanicLatinaeo$p.value,PH_EXITS.T.Tests.AmIndAKNative.Asian.HispanicLatinaeo$conf.int[c(1:2)])
+PH_EXITS.T_results.AmIndAKNative.BlackAfAmerican<-c("AmIndAKNative/BlackAfAmerican",PH_EXITS.T.Tests.AmIndAKNative.BlackAfAmerican$p.value,PH_EXITS.T.Tests.AmIndAKNative.BlackAfAmerican$conf.int[c(1:2)])
+PH_EXITS.T_results.AmIndAKNative.BlackAfAmerican.HispanicLatinaeo<-c("AmIndAKNative/BlackAfAmerican/HispanicLatinaeo",PH_EXITS.T.Tests.AmIndAKNative.BlackAfAmerican.HispanicLatinaeo$p.value,PH_EXITS.T.Tests.AmIndAKNative.BlackAfAmerican.HispanicLatinaeo$conf.int[c(1:2)])
+PH_EXITS.T_results.AmIndAKNative.HispanicLatinaeo<-c("AmIndAKNative/HispanicLatinaeo",PH_EXITS.T.Tests.AmIndAKNative.HispanicLatinaeo$p.value,PH_EXITS.T.Tests.AmIndAKNative.HispanicLatinaeo$conf.int[c(1:2)])
+PH_EXITS.T_results.AmIndAKNative.HispanicLatinaeo.NativeHIPacific<-c("AmIndAKNative/HispanicLatinaeo/NativeHIPacific",PH_EXITS.T.Tests.AmIndAKNative.HispanicLatinaeo.NativeHIPacific$p.value,PH_EXITS.T.Tests.AmIndAKNative.HispanicLatinaeo.NativeHIPacific$conf.int[c(1:2)])
+PH_EXITS.T_results.AmIndAKNative.HispanicLatinaeo.White<-c("AmIndAKNative/HispanicLatinaeo/White",PH_EXITS.T.Tests.AmIndAKNative.HispanicLatinaeo.White$p.value,PH_EXITS.T.Tests.AmIndAKNative.HispanicLatinaeo.White$conf.int[c(1:2)])
+PH_EXITS.T_results.AmIndAKNative.NativeHIPacific<-c("AmIndAKNative/NativeHIPacific",PH_EXITS.T.Tests.AmIndAKNative.NativeHIPacific$p.value,PH_EXITS.T.Tests.AmIndAKNative.NativeHIPacific$conf.int[c(1:2)])
+PH_EXITS.T_results.AmIndAKNative.White<-c("AmIndAKNative/White",PH_EXITS.T.Tests.AmIndAKNative.White$p.value,PH_EXITS.T.Tests.AmIndAKNative.White$conf.int[c(1:2)])
+PH_EXITS.T_results.Asian<-c("Asian",PH_EXITS.T.Tests.Asian$p.value,PH_EXITS.T.Tests.Asian$conf.int[c(1:2)])
+PH_EXITS.T_results.Asian.BlackAfAmerican<-c("Asian/BlackAfAmerican",PH_EXITS.T.Tests.Asian.BlackAfAmerican$p.value,PH_EXITS.T.Tests.Asian.BlackAfAmerican$conf.int[c(1:2)])
+PH_EXITS.T_results.Asian.BlackAfAmerican.HispanicLatinaeo<-c("Asian/BlackAfAmerican/HispanicLatinaeo",PH_EXITS.T.Tests.Asian.BlackAfAmerican.HispanicLatinaeo$p.value,PH_EXITS.T.Tests.Asian.BlackAfAmerican.HispanicLatinaeo$conf.int[c(1:2)])
+PH_EXITS.T_results.Asian.HispanicLatinaeo<-c("Asian/HispanicLatinaeo",PH_EXITS.T.Tests.Asian.HispanicLatinaeo$p.value,PH_EXITS.T.Tests.Asian.HispanicLatinaeo$conf.int[c(1:2)])
+PH_EXITS.T_results.Asian.HispanicLatinaeo.NativeHIPacific<-c("Asian/HispanicLatinaeo/NativeHIPacific",PH_EXITS.T.Tests.Asian.HispanicLatinaeo.NativeHIPacific$p.value,PH_EXITS.T.Tests.Asian.HispanicLatinaeo.NativeHIPacific$conf.int[c(1:2)])
+PH_EXITS.T_results.Asian.HispanicLatinaeo.White<-c("Asian/HispanicLatinaeo/White",PH_EXITS.T.Tests.Asian.HispanicLatinaeo.White$p.value,PH_EXITS.T.Tests.Asian.HispanicLatinaeo.White$conf.int[c(1:2)])
+PH_EXITS.T_results.Asian.White<-c("Asian/White",PH_EXITS.T.Tests.Asian.White$p.value,PH_EXITS.T.Tests.Asian.White$conf.int[c(1:2)])
+PH_EXITS.T_results.BlackAfAmerican<-c("BlackAfAmerican",PH_EXITS.T.Tests.BlackAfAmerican$p.value,PH_EXITS.T.Tests.BlackAfAmerican$conf.int[c(1:2)])
+PH_EXITS.T_results.BlackAfAmerican.HispanicLatinaeo<-c("BlackAfAmerican/HispanicLatinaeo",PH_EXITS.T.Tests.BlackAfAmerican.HispanicLatinaeo$p.value,PH_EXITS.T.Tests.BlackAfAmerican.HispanicLatinaeo$conf.int[c(1:2)])
+PH_EXITS.T_results.BlackAfAmerican.HispanicLatinaeo.NativeHIPacific<-c("BlackAfAmerican/HispanicLatinaeo/NativeHIPacific",PH_EXITS.T.Tests.BlackAfAmerican.HispanicLatinaeo.NativeHIPacific$p.value,PH_EXITS.T.Tests.BlackAfAmerican.HispanicLatinaeo.NativeHIPacific$conf.int[c(1:2)])
+PH_EXITS.T_results.BlackAfAmerican.HispanicLatinaeo.White<-c("BlackAfAmerican/HispanicLatinaeo/White",PH_EXITS.T.Tests.BlackAfAmerican.HispanicLatinaeo.White$p.value,PH_EXITS.T.Tests.BlackAfAmerican.HispanicLatinaeo.White$conf.int[c(1:2)])
+PH_EXITS.T_results.BlackAfAmerican.NativeHIPacific<-c("BlackAfAmerican/NativeHIPacific",PH_EXITS.T.Tests.BlackAfAmerican.NativeHIPacific$p.value,PH_EXITS.T.Tests.BlackAfAmerican.NativeHIPacific$conf.int[c(1:2)])
+PH_EXITS.T_results.BlackAfAmerican.White<-c("BlackAfAmerican/White",PH_EXITS.T.Tests.BlackAfAmerican.White$p.value,PH_EXITS.T.Tests.BlackAfAmerican.White$conf.int[c(1:2)])
+PH_EXITS.T_results.DK.PNTA<-c("DK/PNTA",PH_EXITS.T.Tests.DK.PNTA$p.value,PH_EXITS.T.Tests.DK.PNTA$conf.int[c(1:2)])
+PH_EXITS.T_results.Data.not.Collected<-c("Data not Collected",PH_EXITS.T.Tests.Data.not.Collected$p.value,PH_EXITS.T.Tests.Data.not.Collected$conf.int[c(1:2)])
+PH_EXITS.T_results.HispanicLatinaeo<-c("HispanicLatinaeo",PH_EXITS.T.Tests.HispanicLatinaeo$p.value,PH_EXITS.T.Tests.HispanicLatinaeo$conf.int[c(1:2)])
+PH_EXITS.T_results.HispanicLatinaeo.NativeHIPacific<-c("HispanicLatinaeo/NativeHIPacific",PH_EXITS.T.Tests.HispanicLatinaeo.NativeHIPacific$p.value,PH_EXITS.T.Tests.HispanicLatinaeo.NativeHIPacific$conf.int[c(1:2)])
+PH_EXITS.T_results.HispanicLatinaeo.White<-c("HispanicLatinaeo/White",PH_EXITS.T.Tests.HispanicLatinaeo.White$p.value,PH_EXITS.T.Tests.HispanicLatinaeo.White$conf.int[c(1:2)])
+PH_EXITS.T_results.NativeHIPacific<-c("NativeHIPacific",PH_EXITS.T.Tests.NativeHIPacific$p.value,PH_EXITS.T.Tests.NativeHIPacific$conf.int[c(1:2)])
+PH_EXITS.T_results.NativeHIPacific.White<-c("NativeHIPacific/White",PH_EXITS.T.Tests.NativeHIPacific.White$p.value,PH_EXITS.T.Tests.NativeHIPacific.White$conf.int[c(1:2)])
+PH_EXITS.T_results.White<-c("White",PH_EXITS.T.Tests.White$p.value,PH_EXITS.T.Tests.White$conf.int[c(1:2)])
+
+df <- data.frame("race_list" = 1,
+                 "PH_EXITS.P.Value" = 1 ,
+                 "PH_EXITS.Confidence.Interval.Low" = 1,
+                 "PH_EXITS.Confidence.Interval.High" = 1)
+
+df_PH_EXITS.Results <- rbind(df,PH_EXITS.T_results.AmIndAKNative,PH_EXITS.T_results.AmIndAKNative.Asian.HispanicLatinaeo,
+                             PH_EXITS.T_results.AmIndAKNative.BlackAfAmerican,PH_EXITS.T_results.AmIndAKNative.BlackAfAmerican.HispanicLatinaeo,
+                             PH_EXITS.T_results.AmIndAKNative.HispanicLatinaeo,PH_EXITS.T_results.AmIndAKNative.HispanicLatinaeo.NativeHIPacific,
+                             PH_EXITS.T_results.AmIndAKNative.HispanicLatinaeo.White,PH_EXITS.T_results.AmIndAKNative.NativeHIPacific,
+                             PH_EXITS.T_results.AmIndAKNative.White,PH_EXITS.T_results.Asian,PH_EXITS.T_results.Asian.BlackAfAmerican,
+                             PH_EXITS.T_results.Asian.BlackAfAmerican.HispanicLatinaeo,PH_EXITS.T_results.Asian.HispanicLatinaeo,
+                             PH_EXITS.T_results.Asian.HispanicLatinaeo.NativeHIPacific,PH_EXITS.T_results.Asian.HispanicLatinaeo.White,PH_EXITS.T_results.Asian.White,
+                             PH_EXITS.T_results.BlackAfAmerican,PH_EXITS.T_results.BlackAfAmerican.HispanicLatinaeo,
+                             PH_EXITS.T_results.BlackAfAmerican.HispanicLatinaeo.NativeHIPacific,PH_EXITS.T_results.BlackAfAmerican.HispanicLatinaeo.White,
+                             PH_EXITS.T_results.BlackAfAmerican.NativeHIPacific,PH_EXITS.T_results.BlackAfAmerican.White,PH_EXITS.T_results.DK.PNTA,
+                             PH_EXITS.T_results.Data.not.Collected,PH_EXITS.T_results.HispanicLatinaeo,
+                             PH_EXITS.T_results.HispanicLatinaeo.NativeHIPacific,PH_EXITS.T_results.HispanicLatinaeo.White,
+                             PH_EXITS.T_results.NativeHIPacific,PH_EXITS.T_results.NativeHIPacific.White,PH_EXITS.T_results.White,make.row.names = FALSE)
+
+df_PH_EXITS.Results<- df_PH_EXITS.Results[-1,] #remove dummmy row one
+
+#PH_EXITS Join the results to the overall table
+
+
+PH_EXITS_Compare_Overall <-  TR_Count_Overall %>% 
+  left_join(df_PH_EXITS.Results,by="race_list") %>% 
+  left_join(PH_Exits_Count_Overall,by="race_list") %>% 
+  mutate(PH_EXITS.Significant = case_when(PH_EXITS.P.Value <= .05 & PH_EXITS.Confidence.Interval.Low != "NaN" ~ "Significant", TRUE ~ "Not Significant")) %>% 
+  select(race_list,Total_response_total,Total_response_Percent,PH_EXITS_total,PH_EXITS_percent,PH_EXITS.P.Value,PH_EXITS.Confidence.Interval.Low,PH_EXITS.Confidence.Interval.High,PH_EXITS.Significant)
+
+
+#### Disparities comparing Overall percent enrolled to overall percent exited (not using t-test or anova)
+
+PH_Exits_Percent_difference<- PH_EXITS_Compare_Overall %>% 
+  #mutate(PH_EXITS_percent_recode = if_else(is.na(PH_EXITS_percent),0,PH_EXITS_percent)) %>% NOTE: Add zero values to Exits.
+  filter(is.na(PH_EXITS_total) == FALSE) %>% #Removed all zero responses
+  mutate(
+    Total_response_decimal = as.numeric(sub("%", "",Total_response_Percent,fixed=TRUE))/100,
+    PH_EXITS_decimal =as.numeric(sub("%", "",PH_EXITS_percent,fixed=TRUE))/100,
+    Difference = (Total_response_decimal - PH_EXITS_decimal)) #%>% 
+  #select(race_list,Difference,PH_EXITS.Significant)
+  
+
+Significant_Racial_categories <- c(PH_Exits_Percent_difference$race_list[PH_Exits_Percent_difference$PH_EXITS.Significant == "Significant"])
+
+
+# Create data
+data <- data.frame(
+  x=LETTERS[1:26],
+  y=abs(rnorm(26))
+)
+
+# Change baseline
+Percent_difference_g <- ggplot(PH_Exits_Percent_difference, aes(x=race_list, y=Difference)) +
+  geom_segment( aes(x=race_list, xend=race_list, y=0, yend=Difference), color="grey") +
+  geom_point(color= ifelse(PH_Exits_Percent_difference$race_list %in% all_of(Significant_Racial_categories),"orange","grey"), size=4) +
+  theme_light() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)
+  ) +
+  xlab("") +
+  ylab("Percent Difference between Enrollment and Exit to PH")
+
+
 
 
 #Sanky Graph Compare by 
@@ -272,7 +624,12 @@ p <- sankeyNetwork(Links = links, Nodes = nodes,
                    sinksRight=FALSE)
 p
 
+# Report tables and visuals -----
+gt(TR_Count_Overall) |>
+  tab_header(
+    title = md("Total Response Racial Categories"),
+    subtitle = md("This method reports exactly as the respondent identifies in HMIS")
+  )
 
-
-
+Percent_difference_g
 

@@ -2,7 +2,7 @@ library(networkD3)
 options(scipen=999)
 set.seed(2024)
 
-# Pre-set Categories -- categories are pre-grouped for analysis and resposnes are coded into those bins. Following APR/CAPER Specs
+# Pre-set Categories -- categories are pre-grouped for analysis and responses are coded into those bins. Following APR/CAPER Specs
 
 #Disparities analysis
 ## Compare to general population (we don't have)
@@ -77,9 +77,9 @@ PreCat_T.Tests_Standard <- PreCat_Count_ProjectType %>%
 
 T.Tests_Detail <- PreCat_Count_ProjectType %>% 
   select(PersonalID,ProjectType_name,race_list) %>% 
-  mutate("AmIndAKNative" =case_when(race_list == "AmIndAKNative"~1, TRUE ~0), #### This could be a loop *************
-         
-         
+  mutate("AmIndAKNative" =case_when(race_list == "AmIndAKNative"~1, TRUE ~0)) #### This could be a loop ************
+
+
          
          
          
