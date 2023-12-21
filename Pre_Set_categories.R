@@ -65,7 +65,7 @@ PreCat_Count_ProjectType <- Q12_counts %>%
                                                                              na.rm = TRUE), 2),'%')) %>%
   ungroup()
 
-# Compare Project Type to overall Population ----
+# Compare Overall Enrollment to Exit to permanent housing ----
 # Null hypothesis there is no difference from the overall distribution of racial identity to project type X
 
 PreCat_T.Tests_Standard <- PreCat_Count_ProjectType %>% 
@@ -75,14 +75,48 @@ PreCat_T.Tests_Standard <- PreCat_Count_ProjectType %>%
                                                                         na.rm = TRUE), 4))) %>%
   ungroup()
 
-T.Tests_Detail <- PreCat_Count_ProjectType %>% 
-  select(PersonalID,ProjectType_name,race_list) %>% 
-  mutate("AmIndAKNative" =case_when(race_list == "AmIndAKNative"~1, TRUE ~0)) #### This could be a loop ************
+PreCat_Exits_Overall <- Q12_counts %>% 
+  mutate(Destination_name = case_when(
+    Destination %in% c(400:499)~ "Permanent Housing",
+    Destination %in% c(300:399)~ "Temporary Housing",
+    Destination %in% c(200:299)~ "Institutional Situations",
+    Destination %in% c(100:199)~ "Homeless Situations",
+    Destination %in% c(1:99)~ "Other",
+    is.na(Destination) ~ "Stayer",
+  ),
+  PH_Exits = case_when(
+    Destination_name == "Permanent Housing"~ 1, TRUE ~0))
 
+PreCat_PH_Exits_Count_Overall <- PreCat_Exits_Overall %>% 
+  filter(Destination_name == "Permanent Housing") %>% 
+  group_by(race_list) %>% 
+  summarise(PH_EXITS_total = n()) %>%
+  mutate(PH_EXITS_percent = paste0(round(PH_EXITS_total/sum(PH_EXITS_total[race_list != "Total"],
+                                                                 na.rm = TRUE), 2))) %>%
+  ungroup()
 
-         
-         
-         
+PreCat_PH_EXITS_Compare_Overall <-  PreCat_T.Tests_Standard %>% 
+  left_join(PreCat_PH_Exits_Count_Overall,by="race_list") %>% 
+  mutate(Difference = as.numeric(PH_EXITS_percent) - as.numeric(Total_response_Percent)) %>%  #Interpretation note, Exits to permanent housing are (percent greater than or less) that total enrollment
+  filter(is.na(PH_EXITS_total) == FALSE)
+
+Significant_Racial_categories <- PreCat_PH_EXITS_Compare_Overall$race_list
+
+# Graph/visualizations
+Pre_cat_Percent_difference_g <- ggplot(PreCat_PH_EXITS_Compare_Overall, aes(x=race_list, y=Difference)) +
+  geom_segment(aes(x=race_list, xend=race_list, y=0, yend=Difference), color="grey") + #Axis scale off.
+  geom_point(color= ifelse(PreCat_PH_EXITS_Compare_Overall$race_list %in% all_of(Significant_Racial_categories),"orange","grey"), size=4) +
+  theme_light() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)
+  ) +
+  xlab("") +
+  ylab("Percent Difference between Enrollment and Exit to PH")+
+  labs(title = "Racial Identitites Pre-categorized")
+
          
          
          

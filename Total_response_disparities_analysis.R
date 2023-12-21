@@ -557,18 +557,14 @@ PH_Exits_Percent_difference<- PH_EXITS_Compare_Overall %>%
   mutate(
     Total_response_decimal = as.numeric(sub("%", "",Total_response_Percent,fixed=TRUE))/100,
     PH_EXITS_decimal =as.numeric(sub("%", "",PH_EXITS_percent,fixed=TRUE))/100,
-    Difference = (Total_response_decimal - PH_EXITS_decimal)) #%>% 
+    Difference = (Total_response_decimal - PH_EXITS_decimal))
+#%>% 
   #select(race_list,Difference,PH_EXITS.Significant)
   
 
 Significant_Racial_categories <- c(PH_Exits_Percent_difference$race_list[PH_Exits_Percent_difference$PH_EXITS.Significant == "Significant"])
 
 
-# Create data
-data <- data.frame(
-  x=LETTERS[1:26],
-  y=abs(rnorm(26))
-)
 
 # Change baseline
 Percent_difference_g <- ggplot(PH_Exits_Percent_difference, aes(x=race_list, y=Difference)) +
@@ -625,6 +621,7 @@ p <- sankeyNetwork(Links = links, Nodes = nodes,
 p
 
 # Report tables and visuals -----
+
 gt(TR_Count_Overall) |>
   tab_header(
     title = md("Total Response Racial Categories"),
